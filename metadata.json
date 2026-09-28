@@ -1,0 +1,6 @@
+{
+  "name": "Price Bridge",
+  "description": "Crowdsourced local price-comparison app for shoppers in India. Compare nearby store prices, submit shelf tag updates, and optimize grocery baskets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

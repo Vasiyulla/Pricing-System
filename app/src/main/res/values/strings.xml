@@ -1,0 +1,90 @@
+<resources>
+    <string name="app_name">Price Bridge</string>
+
+    <!-- Status Badges (Community rules compliant - never 'guaranteed' or 'verified price') -->
+    <string name="status_community_reported">Community reported</string>
+    <string name="status_recently_observed">Recently observed</string>
+    <string name="status_community_corroborated">Community corroborated</string>
+    <string name="status_store_confirmed">Store confirmed</string>
+    <string name="status_price_may_be_outdated">Price may be outdated</string>
+    <string name="status_flagged_for_review">Flagged for review</string>
+
+    <!-- Top Bar & Search -->
+    <string name="default_location_title">Indiranagar, 100ft Rd</string>
+    <string name="default_radius_tag">1.5 km radius</string>
+    <string name="live_prices_indicator">Live prices</string>
+    <string name="search_placeholder">Search products, groceries, medicine…</string>
+    <string name="cd_notifications">Notifications</string>
+    <string name="cd_scan_barcode">Scan barcode</string>
+    <string name="cd_location_picker">Select neighborhood and radius</string>
+    <string name="cd_back">Navigate back</string>
+    <string name="cd_clear_search">Clear search query</string>
+
+    <!-- Hero Card -->
+    <string name="hero_badge_label">Smart Basket Optimization</string>
+    <string name="hero_title_prefix">You could save</string>
+    <string name="hero_title_suffix">on groceries today</string>
+    <string name="hero_savings_amount">~₹%1$.0f</string>
+    <string name="hero_compared_info">Compared across %1$d nearby stores including %2$s. %3$d items in %4$s</string>
+    <string name="hero_crowd_tags">Real-time crowd tags · %1$d stores compared</string>
+    <string name="btn_view_basket_deals">View Basket Deals</string>
+
+    <!-- Deals Section -->
+    <string name="section_best_deals_title">Best Deals Near You</string>
+    <string name="section_best_deals_subtitle">Live store differences in %1$s</string>
+    <string name="btn_view_all">View All</string>
+    <string name="save_amount_percent">Save ₹%1$.0f (%2$d%% off)</string>
+    <string name="lowest_in_radius">Lowest in %1$s</string>
+    <string name="compare_stores_action">Compare %1$d Stores</string>
+    <string name="btn_view_store">View Store</string>
+    <string name="price_format">₹%1$.2f</string>
+    <string name="mrp_format">₹%1$.2f</string>
+    <string name="meta_dot">·</string>
+
+    <!-- Karma Section -->
+    <string name="karma_section_title">Help Verify Nearby Prices</string>
+    <string name="karma_points_tag">Earn +%1$d Karma</string>
+    <string name="btn_verify_price">Verify Price</string>
+    <string name="btn_maybe_later">Maybe Later</string>
+
+    <!-- Trust Footer -->
+    <string name="trust_badge_footer">100% unbiased community crowdsourced price comparison</string>
+
+    <!-- Bottom Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_scan">Scan</string>
+    <string name="nav_saved">Saved</string>
+    <string name="nav_profile">Profile</string>
+
+    <!-- States & Offline -->
+    <string name="loading_deals">Finding crowdsourced prices near you…</string>
+    <string name="empty_deals_title">No prices reported in this radius yet</string>
+    <string name="empty_deals_description">Be the first shopper to report a price and help your neighborhood save!</string>
+    <string name="btn_report_first_price">Report a Price</string>
+    <string name="error_title">Couldn’t load nearby prices</string>
+    <string name="btn_retry">Try Again</string>
+    <string name="offline_banner_text">Offline mode · Showing locally cached crowd prices</string>
+
+    <!-- Shopping List / Smart Basket (Product Rule Compliant) -->
+    <string name="shopping_list_title">Smart Shopping Basket</string>
+    <string name="shopping_list_subtitle">%1$d items · Indiranagar cluster</string>
+    <string name="label_estimated_total">Estimated total</string>
+    <string name="label_single_store_total">Single-store estimated: ₹%1$.2f</string>
+    <string name="label_savings_optimized">Save ~₹%1$.0f with store split</string>
+    <string name="section_store_splits">Optimized Store Routing</string>
+    <string name="btn_add_item">Add Item</string>
+    <string name="dialog_add_item_title">Add to Shopping List</string>
+    <string name="input_item_name">Item name (e.g. Fortune Oil, Amul Milk)</string>
+    <string name="input_quantity">Quantity</string>
+    <string name="input_package_size">Package size (e.g. 1L, 500g)</string>
+    <string name="btn_confirm_add">Add to Basket</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="empty_basket_title">Your shopping list is empty</string>
+    <string name="empty_basket_description">Add daily staples, milk, or oil to find where each item is sold cheapest nearby.</string>
+    <string name="btn_add_first_item">Add Your First Item</string>
+    <string name="cd_check_item">Mark item as bought</string>
+    <string name="cd_delete_item">Delete item</string>
+    <string name="store_split_item_count">%1$d items · ₹%2$.2f</string>
+    <string name="cd_back_to_home">Back to Home</string>
+</resources>
