@@ -156,6 +156,11 @@ fun ProductDealCard(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            StoreReliabilityBadge(
+                                reliabilityScore = product.bestStorePrice.reliabilityScore,
+                                discrepancyWarning = product.bestStorePrice.discrepancyWarning
+                            )
                         }
 
                         // Product Title

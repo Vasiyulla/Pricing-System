@@ -22,7 +22,8 @@ data class HomeUiState(
     val selectedCategoryId: String = "all",
     val deals: List<Product> = emptyList(),
     val karmaPrompt: KarmaVerificationPrompt? = null,
-    val isLocationSheetOpen: Boolean = false
+    val isLocationSheetOpen: Boolean = false,
+    val pendingOfflineCount: Int = 0
 ) {
     val isEmpty: Boolean get() = !isLoading && errorMessage == null && deals.isEmpty()
 }
@@ -42,4 +43,5 @@ sealed interface HomeUiEvent {
     data class OnBottomNavClicked(val destination: BottomBarDestination) : HomeUiEvent
     data class OnChangeLocation(val neighborhood: String, val radiusKm: Double) : HomeUiEvent
     data object OnDismissLocationSheet : HomeUiEvent
+    data object OnSyncOfflineQueue : HomeUiEvent
 }

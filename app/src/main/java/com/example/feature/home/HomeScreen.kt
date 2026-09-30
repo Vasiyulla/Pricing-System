@@ -2,6 +2,7 @@ package com.example.feature.home
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,8 +22,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -185,6 +191,64 @@ fun HomeContent(
                         ),
                         verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.spaceMd)
                     ) {
+                        // Offline Sync Queue Banner (Plan Sprint 6)
+                        if (uiState.pendingOfflineCount > 0) {
+                            item(key = "offline_sync_banner") {
+                                Box(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
+                                    Surface(
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(14.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.CloudSync,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "${uiState.pendingOfflineCount} price report${if (uiState.pendingOfflineCount > 1) "s" else ""} queued offline",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                                )
+                                                Text(
+                                                    text = "Saved in Room • Safe to sync anytime",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                                                )
+                                            }
+                                            Button(
+                                                onClick = { onEvent(HomeUiEvent.OnSyncOfflineQueue) },
+                                                shape = RoundedCornerShape(10.dp),
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Sync Now",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Hero Savings Card (Smart Basket Optimization)
                         uiState.basketSummary?.let { basket ->
                             item(key = "hero_savings_card") {
@@ -307,11 +371,13 @@ fun HomeContent(
 
     // Modal Location & Radius Selector Bottom Sheet
     if (uiState.isLocationSheetOpen) {
-        val sheetState = rememberModalBottomSheetState()
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { onEvent(HomeUiEvent.OnDismissLocationSheet) },
             sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            dragHandle = { BottomSheetDefaults.DragHandle() }
         ) {
             LocationSelectionSheetContent(
                 currentNeighborhood = uiState.location.neighborhood,
@@ -323,6 +389,12 @@ fun HomeContent(
     }
 }
 
+private data class NeighborhoodOption(
+    val name: String,
+    val zone: String,
+    val storeCount: Int
+)
+
 @Composable
 private fun LocationSelectionSheetContent(
     currentNeighborhood: String,
@@ -332,11 +404,11 @@ private fun LocationSelectionSheetContent(
     var selectedRadius by remember { mutableStateOf(1.5) }
 
     val locations = listOf(
-        "Indiranagar, 100ft Rd",
-        "Koramangala, 80ft Rd",
-        "HSR Layout, Sector 1",
-        "Jayanagar, 4th Block",
-        "Whitefield, Main Rd"
+        NeighborhoodOption("Indiranagar, 100ft Rd", "East Bangalore", 18),
+        NeighborhoodOption("Koramangala, 80ft Rd", "South-East Zone", 24),
+        NeighborhoodOption("HSR Layout, Sector 1", "South Bangalore", 15),
+        NeighborhoodOption("Jayanagar, 4th Block", "Central South", 21),
+        NeighborhoodOption("Whitefield, Main Rd", "IT Corridor Zone", 16)
     )
 
     val radii = listOf(1.0, 1.5, 3.0, 5.0)
@@ -344,112 +416,174 @@ private fun LocationSelectionSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(MaterialTheme.spacing.spaceLg)
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Default.LocationOn,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(MaterialTheme.spacing.spaceSm))
-            Text(
-                text = "Choose Search Location",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        Spacer(modifier = Modifier.height(MaterialTheme.spacing.spaceMd))
-
-        Text(
-            text = "Select Neighborhood",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(MaterialTheme.spacing.spaceSm))
-
-        locations.forEach { location ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+        // Header
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { selectedLocation = location }
-                    .padding(vertical = 4.dp)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
             ) {
-                RadioButton(
-                    selected = selectedLocation == location,
-                    onClick = { selectedLocation = location }
+                Icon(
+                    imageVector = Icons.Default.NearMe,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(24.dp)
                 )
-                Spacer(modifier = Modifier.width(MaterialTheme.spacing.spaceSm))
+            }
+            Column {
                 Text(
-                    text = location,
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "Choose Shopping Area",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Compare prices across local kiranas & supermarkets",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(MaterialTheme.spacing.spaceMd))
-
-        Text(
-            text = "Search Radius",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(MaterialTheme.spacing.spaceSm))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
+        // Neighborhood Selection Tiles
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            radii.forEach { radius ->
-                val isSelected = selectedRadius == radius
+            Text(
+                text = "Nearby Pilot Hubs",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.outline
+            )
+
+            locations.forEach { item ->
+                val isSelected = selectedLocation.startsWith(item.name.substringBefore(","))
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerLow,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    border = BorderStroke(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
                     ),
                     modifier = Modifier
-                        .weight(1f)
-                        .clickable { selectedRadius = radius }
+                        .fillMaxWidth()
+                        .clickable { selectedLocation = item.name }
                 ) {
-                    Text(
-                        text = "${radius} km",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = item.name,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${item.zone} • ${item.storeCount} verified stores",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(MaterialTheme.spacing.spaceLg))
+        // Search Radius Selector
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "Shopping Radius",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.outline
+            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                radii.forEach { radius ->
+                    val isSelected = selectedRadius == radius
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { selectedRadius = radius }
+                    ) {
+                        Text(
+                            text = "${radius} km",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
 
         Button(
             onClick = { onSelectLocation(selectedLocation, selectedRadius) },
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
+                .height(52.dp)
                 .testTag("btn_confirm_location")
         ) {
             Text(
-                text = "Apply Location",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold
+                text = "Apply & Explore Nearby Prices",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
             )
         }
-
-        Spacer(modifier = Modifier.height(MaterialTheme.spacing.spaceMd))
     }
 }
 

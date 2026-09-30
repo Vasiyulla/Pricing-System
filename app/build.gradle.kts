@@ -2,6 +2,7 @@ import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesS
 
 plugins {
   alias(libs.plugins.android.application)
+  alias(libs.plugins.kotlin.android)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
@@ -10,7 +11,7 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk = 36
 
   defaultConfig {
     applicationId = "com.aistudio.pricebridge.qvxkzp"
@@ -30,11 +31,14 @@ android {
       keyAlias = "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+    val customDebugKeystore = file("${rootDir}/debug.keystore")
+    if (customDebugKeystore.exists()) {
+      create("debugConfig") {
+        storeFile = customDebugKeystore
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
   }
 
@@ -45,7 +49,9 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
+    debug {
+      signingConfig = signingConfigs.findByName("debugConfig") ?: signingConfigs.getByName("debug")
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
@@ -59,6 +65,9 @@ android {
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
+  }
+  kotlinOptions {
+    jvmTarget = "11"
   }
 }
 
@@ -99,6 +108,7 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
+  implementation(libs.core.ktx)
   implementation(libs.firebase.ai)
   // Uncomment to use Firestore:
   // implementation(libs.firebase.firestore)

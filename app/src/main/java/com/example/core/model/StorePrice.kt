@@ -14,7 +14,12 @@ data class StorePrice(
     val sourceDescription: String, // e.g. "Community reported", "Verified by 4 contributors"
     val statusBadge: PriceStatusBadgeType,
     val hasPhotoVerification: Boolean = false,
-    val isLowestPrice: Boolean = false
+    val isLowestPrice: Boolean = false,
+    val reliabilityScore: Int = 96,
+    val isStoreConfirmedPartner: Boolean = false,
+    val discrepancyWarning: String? = null,
+    val supersededPrice: Double? = null,
+    val correctionHistoryCount: Int = 0
 ) {
     val savingsAmount: Double = if (mrp > price) mrp - price else 0.0
     val discountPercent: Int = if (mrp > 0 && mrp > price) (((mrp - price) / mrp) * 100).toInt() else 0

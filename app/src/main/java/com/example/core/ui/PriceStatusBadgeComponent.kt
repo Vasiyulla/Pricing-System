@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.core.model.PriceStatusBadgeType
 import com.example.ui.theme.spacing
@@ -91,5 +93,74 @@ fun PriceStatusBadgeComponent(
             style = MaterialTheme.typography.labelSmall,
             color = contentColor
         )
+    }
+}
+
+/**
+ * Store Reliability Badge (Phase 2 Data Quality):
+ * Shows store pricing consistency percentage and warns about community reported discrepancies.
+ */
+@Composable
+fun StoreReliabilityBadge(
+    reliabilityScore: Int,
+    discrepancyWarning: String? = null,
+    modifier: Modifier = Modifier
+) {
+    if (discrepancyWarning != null) {
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+            modifier = modifier
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Disputed",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    } else {
+        val (tintColor, containerColor) = when {
+            reliabilityScore >= 90 -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            reliabilityScore >= 75 -> MaterialTheme.colorScheme.tertiary to MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+            else -> MaterialTheme.colorScheme.error to MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+        }
+
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = containerColor,
+            modifier = modifier
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.VerifiedUser,
+                    contentDescription = null,
+                    tint = tintColor,
+                    modifier = Modifier.size(11.dp)
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = "$reliabilityScore% Reliable",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = tintColor
+                )
+            }
+        }
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,11 +20,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,7 +52,7 @@ enum class BottomBarDestination(
 ) {
     Home("home", R.string.nav_home, Icons.Filled.Home, Icons.Outlined.Home),
     Search("search", R.string.nav_search, Icons.Filled.Search, Icons.Outlined.Search),
-    Scan("scan", R.string.nav_scan, Icons.Filled.QrCodeScanner, Icons.Filled.QrCodeScanner),
+    Scan("scan", R.string.nav_scan, Icons.Filled.PhotoCamera, Icons.Outlined.PhotoCamera),
     Saved("saved", R.string.nav_saved, Icons.Filled.Bookmark, Icons.Outlined.BookmarkBorder),
     Profile("profile", R.string.nav_profile, Icons.Filled.Person, Icons.Outlined.PersonOutline)
 }
@@ -71,91 +73,104 @@ fun PriceBridgeBottomBar(
             shadowElevation = 8.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically
+                    .navigationBarsPadding()
             ) {
-                // Home
-                NavDestinationItem(
-                    destination = BottomBarDestination.Home,
-                    isSelected = currentDestination == BottomBarDestination.Home,
-                    onClick = { onDestinationClick(BottomBarDestination.Home) },
-                    modifier = Modifier.weight(1f)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Home
+                    NavDestinationItem(
+                        destination = BottomBarDestination.Home,
+                        isSelected = currentDestination == BottomBarDestination.Home,
+                        onClick = { onDestinationClick(BottomBarDestination.Home) },
+                        modifier = Modifier.weight(1f)
+                    )
 
-                // Search
-                NavDestinationItem(
-                    destination = BottomBarDestination.Search,
-                    isSelected = currentDestination == BottomBarDestination.Search,
-                    onClick = { onDestinationClick(BottomBarDestination.Search) },
-                    modifier = Modifier.weight(1f)
-                )
+                    // Search
+                    NavDestinationItem(
+                        destination = BottomBarDestination.Search,
+                        isSelected = currentDestination == BottomBarDestination.Search,
+                        onClick = { onDestinationClick(BottomBarDestination.Search) },
+                        modifier = Modifier.weight(1f)
+                    )
 
-                // Center placeholder for floating scan button
-                Spacer(modifier = Modifier.weight(1f))
+                    // Center placeholder for floating scan button
+                    Spacer(modifier = Modifier.weight(1f))
 
-                // Saved
-                NavDestinationItem(
-                    destination = BottomBarDestination.Saved,
-                    isSelected = currentDestination == BottomBarDestination.Saved,
-                    onClick = { onDestinationClick(BottomBarDestination.Saved) },
-                    modifier = Modifier.weight(1f)
-                )
+                    // Saved
+                    NavDestinationItem(
+                        destination = BottomBarDestination.Saved,
+                        isSelected = currentDestination == BottomBarDestination.Saved,
+                        onClick = { onDestinationClick(BottomBarDestination.Saved) },
+                        modifier = Modifier.weight(1f)
+                    )
 
-                // Profile
-                NavDestinationItem(
-                    destination = BottomBarDestination.Profile,
-                    isSelected = currentDestination == BottomBarDestination.Profile,
-                    onClick = { onDestinationClick(BottomBarDestination.Profile) },
-                    modifier = Modifier.weight(1f)
-                )
+                    // Profile
+                    NavDestinationItem(
+                        destination = BottomBarDestination.Profile,
+                        isSelected = currentDestination == BottomBarDestination.Profile,
+                        onClick = { onDestinationClick(BottomBarDestination.Profile) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
 
-        // Prominent Floating Scan Button in Center
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+        // Prominent Floating Scan Button in Center, respecting navigation bars inset
+        Box(
             modifier = Modifier
-                .offset(y = (-14).dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = { onDestinationClick(BottomBarDestination.Scan) }
-                )
-                .testTag("bottom_nav_scan_fab")
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .size(54.dp)
-                    .shadow(8.dp, CircleShape)
-                    .background(
-                        MaterialTheme.colorScheme.onPrimaryContainer,
-                        CircleShape
+                    .offset(y = (-14).dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { onDestinationClick(BottomBarDestination.Scan) }
                     )
-                    .border(
-                        4.dp,
-                        MaterialTheme.colorScheme.surface,
-                        CircleShape
-                    )
+                    .testTag("bottom_nav_scan_fab")
             ) {
-                Icon(
-                    imageVector = Icons.Default.QrCodeScanner,
-                    contentDescription = stringResource(R.string.nav_scan),
-                    tint = MaterialTheme.colorScheme.surfaceBright,
-                    modifier = Modifier.size(26.dp)
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(54.dp)
+                        .shadow(8.dp, CircleShape)
+                        .background(
+                            MaterialTheme.colorScheme.onPrimaryContainer,
+                            CircleShape
+                        )
+                        .border(
+                            4.dp,
+                            MaterialTheme.colorScheme.surface,
+                            CircleShape
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PhotoCamera,
+                        contentDescription = stringResource(R.string.nav_scan),
+                        tint = MaterialTheme.colorScheme.surfaceBright,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.nav_scan),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = 2.dp)
                 )
             }
-            Text(
-                text = stringResource(R.string.nav_scan),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(top = 2.dp)
-            )
         }
     }
 }

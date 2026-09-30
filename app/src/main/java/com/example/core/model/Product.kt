@@ -12,5 +12,6 @@ data class Product(
     val imageUrl: String,
     val bestStorePrice: StorePrice,
     val storesComparedCount: Int,
-    val alternativePrices: List<StorePrice> = emptyList()
+    val alternativePrices: List<StorePrice> = emptyList(),
+    val barcode: String? = null
 )

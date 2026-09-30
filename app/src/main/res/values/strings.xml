@@ -19,6 +19,8 @@
     <string name="cd_location_picker">Select neighborhood and radius</string>
     <string name="cd_back">Navigate back</string>
     <string name="cd_clear_search">Clear search query</string>
+    <string name="cd_share">Share</string>
+    <string name="cd_settings">Settings</string>
 
     <!-- Hero Card -->
     <string name="hero_badge_label">Smart Basket Optimization</string>
@@ -53,16 +55,39 @@
     <!-- Bottom Navigation -->
     <string name="nav_home">Home</string>
     <string name="nav_search">Search</string>
-    <string name="nav_scan">Scan</string>
+    <string name="nav_scan">Capture</string>
     <string name="nav_saved">Saved</string>
     <string name="nav_profile">Profile</string>
+
+    <!-- Camera Photo Capture & Instant Price Reporting -->
+    <string name="capture_title">Capture &amp; Add Price</string>
+    <string name="capture_instruction">Snap product, shelf price tag, or bill</string>
+    <string name="capture_shutter_hint">Tap to capture evidence</string>
+    <string name="capture_retake">Retake</string>
+    <string name="capture_form_title">Add Price Details</string>
+    <string name="capture_product_name_label">Product Name</string>
+    <string name="capture_product_name_placeholder">e.g. Fortune Sunlite Sunflower Oil</string>
+    <string name="capture_store_name_label">Store Name</string>
+    <string name="capture_store_name_placeholder">e.g. More Supermarket, Indiranagar</string>
+    <string name="capture_price_label">Selling Price (₹)</string>
+    <string name="capture_unit_label">Pack Size / Unit</string>
+    <string name="capture_evidence_type_label">Evidence Type</string>
+    <string name="capture_evidence_shelf">Shelf Tag</string>
+    <string name="capture_evidence_receipt">Receipt / Bill</string>
+    <string name="capture_evidence_item">Product Label</string>
+    <string name="capture_submit_btn">Submit Price &amp; Photo</string>
+    <string name="capture_success_title">Photo &amp; Price Submitted!</string>
+    <string name="capture_success_desc">Thank you! Your evidence has been recorded. +20 Karma points earned.</string>
+    <string name="capture_btn_another">Capture Another</string>
+    <string name="capture_mode_photo">Camera Photo</string>
+    <string name="capture_mode_barcode">Barcode Scan</string>
 
     <!-- States & Offline -->
     <string name="loading_deals">Finding crowdsourced prices near you…</string>
     <string name="empty_deals_title">No prices reported in this radius yet</string>
     <string name="empty_deals_description">Be the first shopper to report a price and help your neighborhood save!</string>
     <string name="btn_report_first_price">Report a Price</string>
-    <string name="error_title">Couldn’t load nearby prices</string>
+    <string name="error_title">Couldn\'t load nearby prices</string>
     <string name="btn_retry">Try Again</string>
     <string name="offline_banner_text">Offline mode · Showing locally cached crowd prices</string>
 
@@ -87,4 +112,121 @@
     <string name="cd_delete_item">Delete item</string>
     <string name="store_split_item_count">%1$d items · ₹%2$.2f</string>
     <string name="cd_back_to_home">Back to Home</string>
+
+    <!-- Search Screen -->
+    <string name="search_loading">Searching crowdsourced prices…</string>
+    <string name="search_recent_title">Recent Searches</string>
+    <string name="search_results_count">%1$d products found</string>
+    <string name="search_no_results_title">No products found</string>
+    <string name="search_no_results_description">No matches for \"%1$s\". Try a different keyword or report this product to help your community.</string>
+
+    <!-- Product Detail Screen -->
+    <string name="product_detail_title">Price Comparison</string>
+    <string name="loading_product_detail">Loading price comparison…</string>
+    <string name="price_comparison_title">Store Prices</string>
+    <string name="price_comparison_subtitle">Across %1$d nearby stores</string>
+    <string name="best_price_badge">Best Price</string>
+    <string name="btn_report_price">Report a Price</string>
+
+    <!-- Submit Price Screen -->
+    <string name="submit_price_title">Submit a Price</string>
+    <string name="submit_product_label">Product</string>
+    <string name="submit_product_placeholder">Search for a product…</string>
+    <string name="submit_store_label">Nearby Store</string>
+    <string name="submit_price_label">Selling Price (₹)</string>
+    <string name="submit_mrp_label">MRP (₹)</string>
+    <string name="submit_source_label">How did you observe this price?</string>
+    <string name="btn_submit_price">Submit Price</string>
+    <string name="submit_disclaimer">Community prices are never presented as guaranteed. Your submission helps neighbours compare honestly.</string>
+    <string name="submit_success_title">Price Submitted!</string>
+    <string name="submit_success_description">Thank you for contributing! Your report helps your community find better deals. +20 Karma earned.</string>
+    <string name="btn_done">Done</string>
+
+    <!-- Profile Screen -->
+    <string name="profile_title">Karma Profile</string>
+    <string name="loading_profile">Loading your profile…</string>
+    <string name="profile_karma_points">%1$d Karma Points</string>
+    <string name="profile_member_since">Member since %1$s</string>
+    <string name="profile_stat_reported">Reported</string>
+    <string name="profile_stat_verified">Verified</string>
+    <string name="profile_stat_accuracy">Accuracy</string>
+    <string name="profile_recent_submissions">Recent Submissions</string>
+
+    <!-- Freshness Verification Prompt (Plan Section 2) -->
+    <string name="prompt_still_price_title">Still ₹%1$.0f at %2$s?</string>
+    <string name="prompt_still_price_subtitle">This price was observed %1$s. Help your neighbors keep prices accurate!</string>
+    <string name="btn_yes_still_price">Yes, Still ₹%1$.0f</string>
+    <string name="btn_no_price_changed">Price Changed</string>
+    <string name="freshness_confirmed_toast">Thank you! Price verified for %1$s. +5 Karma earned.</string>
+
+    <!-- Store Discrepancy Reporting (Plan Section 5) -->
+    <string name="discrepancy_action_btn">Report Mismatch</string>
+    <string name="discrepancy_report_title">Report Price Mismatch</string>
+    <string name="discrepancy_report_subtitle">Help the community flag incorrect prices or store mismatches at %1$s</string>
+    <string name="discrepancy_reason_price_changed">Price changed / Higher than listed</string>
+    <string name="discrepancy_reason_offer_expired">Discount or offer expired</string>
+    <string name="discrepancy_reason_overcharged">Counter billed different amount</string>
+    <string name="discrepancy_reason_pack_different">Pack size or variant differed</string>
+    <string name="discrepancy_reason_store_refused">Store refused to honor price</string>
+    <string name="discrepancy_reason_out_of_stock">Item out of stock / unavailable</string>
+    <string name="discrepancy_notes_label">Additional details (optional)</string>
+    <string name="discrepancy_notes_placeholder">e.g. Counter said ₹155 instead of ₹142 today morning</string>
+    <string name="btn_submit_discrepancy">Report Discrepancy</string>
+    <string name="discrepancy_success_toast">Discrepancy reported. Community trust score updated. +10 Karma earned.</string>
+
+    <!-- Barcode Scanner (Plan Sprint 5) -->
+    <string name="scan_title">Scan Barcode</string>
+    <string name="scan_instruction">Align barcode within the frame</string>
+    <string name="scan_manual_entry">Enter barcode manually</string>
+    <string name="scan_product_found">Product Found</string>
+    <string name="scan_product_not_found">Product Not in Catalog</string>
+    <string name="scan_add_product_prompt">This item is not in Price Bridge yet. Be the first to add it!</string>
+    <string name="btn_view_product">View Prices</string>
+    <string name="btn_add_new_product">Add to Catalog</string>
+    <string name="scan_sample_barcodes">Quick Test Barcodes</string>
+
+    <!-- Add Product Screen (Plan Sprint 3b) -->
+    <string name="add_product_title">Add Product</string>
+    <string name="add_product_name_label">Product Name</string>
+    <string name="add_product_name_placeholder">e.g. Aashirvaad Shubh Chakki Atta</string>
+    <string name="add_product_category_label">Category</string>
+    <string name="add_product_pack_label">Package Size / Unit</string>
+    <string name="add_product_pack_placeholder">e.g. 1L Pouch, 5kg Bag, 500g</string>
+    <string name="add_product_mrp_label">MRP (₹)</string>
+    <string name="add_product_barcode_label">Barcode (Optional)</string>
+    <string name="btn_save_and_submit_price">Save &amp; Report Price</string>
+
+    <!-- Auth & Onboarding Flow (Plan Sprint 3 & Section 9) -->
+    <string name="auth_title">Welcome to Price Bridge</string>
+    <string name="auth_subtitle">Never overpay at local stores. Discover verified crowdsourced prices nearby.</string>
+    <string name="auth_phone_label">Mobile Number</string>
+    <string name="auth_phone_placeholder">10-digit mobile number</string>
+    <string name="auth_btn_send_otp">Get OTP</string>
+    <string name="auth_otp_title">Verify Mobile</string>
+    <string name="auth_otp_subtitle">Enter 6-digit code sent to +91 %1$s</string>
+    <string name="auth_btn_verify_otp">Verify &amp; Continue</string>
+    <string name="auth_btn_resend_otp">Resend OTP</string>
+    <string name="auth_or_divider">OR</string>
+    <string name="auth_btn_google">Continue with Google</string>
+    <string name="auth_btn_guest">Explore prices as guest</string>
+    <string name="auth_demo_chip">Demo: +91 98765 43210</string>
+
+    <!-- DPDP Consent (Plan Section 9 & DPDP Act 2023) -->
+    <string name="dpdp_consent_title">DPDP Privacy &amp; Trust Notice</string>
+    <string name="dpdp_consent_subtitle">Compliant with the Digital Personal Data Protection Act 2023</string>
+    <string name="dpdp_point_location_title">On-Demand Approximate Location</string>
+    <string name="dpdp_point_location_desc">Used solely to cluster nearby supermarkets and kiranas when you search. No background tracking ever.</string>
+    <string name="dpdp_point_privacy_title">Pseudonymized Price Ledger</string>
+    <string name="dpdp_point_privacy_desc">Price contributions are recorded on a public ledger for community benefit, but your personal identifiers and phone number are never exposed.</string>
+    <string name="dpdp_point_erasure_title">Right to Correction &amp; Erasure</string>
+    <string name="dpdp_point_erasure_desc">Under DPDP Section 12, you can view, correct, or permanently delete your account and all associated submissions.</string>
+    <string name="dpdp_point_images_title">Image Metadata Scrubbing</string>
+    <string name="dpdp_point_images_desc">Uploaded shelf label and receipt photos have EXIF metadata and precise coordinates stripped immediately upon upload.</string>
+    <string name="dpdp_checkbox_label">I have read and consent to the data processing practices under the DPDP Act 2023.</string>
+    <string name="dpdp_btn_accept">I Agree &amp; Continue</string>
+    <string name="dpdp_btn_view_terms">DPDP Privacy Notice</string>
+    <string name="profile_switch_title">Switch Contributor Profile</string>
+    <string name="profile_btn_switch">Switch Persona</string>
+    <string name="profile_btn_logout">Sign Out</string>
+    <string name="profile_btn_dpdp">Privacy &amp; Data Rights</string>
 </resources>

@@ -57,6 +57,11 @@ class HomeViewModel(
                     _uiState.update { it.copy(isLocationSheetOpen = false) }
                 }
             }
+            is HomeUiEvent.OnSyncOfflineQueue -> {
+                viewModelScope.launch {
+                    repository.syncOfflineSubmissions()
+                }
+            }
             is HomeUiEvent.OnRetryClicked -> {
                 errorMessageState.value = null
                 loadData()
@@ -69,6 +74,13 @@ class HomeViewModel(
 
     private fun loadData() {
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+
+        // Observe offline queue count
+        viewModelScope.launch {
+            repository.getPendingOfflineSubmissionCount().collect { count ->
+                _uiState.update { it.copy(pendingOfflineCount = count) }
+            }
+        }
         viewModelScope.launch {
             combine(
                 repository.getLocation(),
