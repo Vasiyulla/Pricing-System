@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.AddShoppingCart
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
@@ -90,6 +91,7 @@ fun ProductDetailScreen(
     productId: String,
     onNavigateBack: () -> Unit,
     onNavigateToSubmitPrice: (String) -> Unit,
+    onNavigateToStore: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ProductDetailViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
         ProductDetailViewModel(productId)
@@ -103,6 +105,7 @@ fun ProductDetailScreen(
             when (event) {
                 is ProductDetailUiEvent.OnBackClicked -> onNavigateBack()
                 is ProductDetailUiEvent.OnSubmitPriceClicked -> onNavigateToSubmitPrice(productId)
+                is ProductDetailUiEvent.OnStoreClicked -> onNavigateToStore(event.storeId)
                 is ProductDetailUiEvent.OnShareClicked -> { /* TODO share intent */ }
                 else -> viewModel.onEvent(event)
             }

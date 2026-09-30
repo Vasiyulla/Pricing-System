@@ -1,6 +1,9 @@
 package com.example.core.data
 
 import com.example.core.model.Category
+import com.example.core.model.GoogleTaskItem
+import com.example.core.model.GoogleTaskList
+import com.example.core.model.GoogleTasksAuthState
 import com.example.core.model.KarmaVerificationPrompt
 import com.example.core.model.LocationInfo
 import com.example.core.model.PriceSubmission
@@ -81,7 +84,23 @@ interface PriceBridgeRepository {
     fun getAvailableProfiles(): Flow<List<UserProfile>>
     suspend fun switchProfile(profileId: String)
 
+    // ── Phase 4: Store Ecosystem & Discrepancies ──
+    fun getNearbyStores(): Flow<List<Store>>
+    fun getStoreById(storeId: String): Flow<Store?>
+    fun getStorePrices(storeId: String): Flow<List<StorePrice>>
+    suspend fun requestPreVisitPriceCheck(storeId: String, productId: String? = null): Boolean
+    suspend fun claimStore(storeId: String, merchantName: String, contactPhone: String): Boolean
+
+    // ── Phase 4: Google Tasks Integration ──
+    fun getGoogleTasksAuthState(): Flow<GoogleTasksAuthState>
+    suspend fun connectGoogleTasks(email: String): Boolean
+    suspend fun disconnectGoogleTasks(): Boolean
+    fun getGoogleTaskLists(): Flow<List<GoogleTaskList>>
+    fun getGoogleTasksForList(listId: String): Flow<List<GoogleTaskItem>>
+    suspend fun importGoogleTasks(selectedTasks: List<GoogleTaskItem>): Int
+
     // ── Settings ──
     suspend fun updateLocation(neighborhood: String, radiusKm: Double)
     suspend fun dismissKarmaPrompt(promptId: String)
 }
+

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Layers
@@ -89,6 +90,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
+import com.example.feature.googletasks.GoogleTasksImportSheet
 import com.example.core.model.PriceStatusBadgeType
 import com.example.core.model.PriceWatchAlert
 import com.example.core.model.SavedShoppingList
@@ -202,6 +204,16 @@ fun BasketContent(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                    IconButton(
+                        onClick = { onEvent(BasketUiEvent.OnOpenGoogleTasksSheet) },
+                        modifier = Modifier.testTag("btn_google_tasks_import")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = "Import from Google Tasks",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                     IconButton(
                         onClick = { onEvent(BasketUiEvent.OnShareListClicked) },
@@ -484,6 +496,20 @@ fun BasketContent(
             onConfirm = { name, quantity, size ->
                 onEvent(BasketUiEvent.OnConfirmAddItem(name, quantity, size))
             }
+        )
+    }
+
+    // Google Tasks Import Sheet (Phase 4)
+    if (uiState.isGoogleTasksSheetOpen) {
+        GoogleTasksImportSheet(
+            authState = uiState.googleTasksAuthState,
+            availableLists = uiState.availableGoogleTaskLists,
+            tasksInSelectedList = uiState.googleTasksInSelectedList,
+            onConnectGoogle = { email -> onEvent(BasketUiEvent.OnConnectGoogleTasks(email)) },
+            onDisconnectGoogle = { onEvent(BasketUiEvent.OnDisconnectGoogleTasks) },
+            onSelectList = { listId -> onEvent(BasketUiEvent.OnSelectGoogleTaskList(listId)) },
+            onImportTasks = { tasks -> onEvent(BasketUiEvent.OnImportGoogleTasks(tasks)) },
+            onDismiss = { onEvent(BasketUiEvent.OnDismissGoogleTasksSheet) }
         )
     }
 }

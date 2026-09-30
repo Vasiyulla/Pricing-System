@@ -20,6 +20,7 @@ import com.example.feature.productdetail.ProductDetailScreen
 import com.example.feature.profile.ProfileScreen
 import com.example.feature.scan.ScanScreen
 import com.example.feature.search.SearchScreen
+import com.example.feature.store.StoreDetailScreen
 import com.example.feature.submit.SubmitPriceScreen
 import com.example.ui.theme.PriceBridgeTheme
 
@@ -34,10 +35,12 @@ object Routes {
     const val PROFILE = "profile"
     const val AUTH = "auth"
     const val PRODUCT_DETAIL = "product/{productId}"
+    const val STORE_DETAIL = "store/{storeId}"
     const val SUBMIT_PRICE = "submit_price?productId={productId}"
     const val ADD_PRODUCT = "add_product?barcode={barcode}"
 
     fun productDetail(productId: String) = "product/$productId"
+    fun storeDetail(storeId: String) = "store/$storeId"
     fun submitPrice(productId: String? = null): String {
         return if (productId != null) "submit_price?productId=$productId" else "submit_price"
     }
@@ -235,6 +238,9 @@ fun PriceBridgeNavHost(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToSubmitPrice = { id ->
                     navController.navigate(Routes.submitPrice(id))
+                },
+                onNavigateToStore = { storeId ->
+                    navController.navigate(Routes.storeDetail(storeId))
                 }
             )
         }
@@ -282,6 +288,21 @@ fun PriceBridgeNavHost(
                     }
                 },
                 prefilledBarcode = barcode
+            )
+        }
+
+        // ── Store Detail (Phase 4) ──
+        composable(
+            route = Routes.STORE_DETAIL,
+            arguments = listOf(navArgument("storeId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val storeId = backStackEntry.arguments?.getString("storeId") ?: return@composable
+            StoreDetailScreen(
+                storeId = storeId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToProductDetail = { productId ->
+                    navController.navigate(Routes.productDetail(productId))
+                }
             )
         }
 

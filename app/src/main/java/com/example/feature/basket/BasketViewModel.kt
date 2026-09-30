@@ -96,11 +96,64 @@ class BasketViewModel(
                     _uiState.update { it.copy(isAddItemDialogOpen = false) }
                 }
             }
+            is BasketUiEvent.OnOpenGoogleTasksSheet -> {
+                _uiState.update { it.copy(isGoogleTasksSheetOpen = true) }
+                loadGoogleTasksForSelectedList()
+            }
+            is BasketUiEvent.OnDismissGoogleTasksSheet -> {
+                _uiState.update { it.copy(isGoogleTasksSheetOpen = false) }
+            }
+            is BasketUiEvent.OnConnectGoogleTasks -> {
+                viewModelScope.launch {
+                    repository.connectGoogleTasks(event.email)
+                    loadGoogleTasksForSelectedList()
+                }
+            }
+            is BasketUiEvent.OnDisconnectGoogleTasks -> {
+                viewModelScope.launch {
+                    repository.disconnectGoogleTasks()
+                }
+            }
+            is BasketUiEvent.OnSelectGoogleTaskList -> {
+                _uiState.update {
+                    it.copy(
+                        googleTasksAuthState = it.googleTasksAuthState.copy(selectedListId = event.listId)
+                    )
+                }
+                loadGoogleTasksForSelectedList(event.listId)
+            }
+            is BasketUiEvent.OnImportGoogleTasks -> {
+                viewModelScope.launch {
+                    val count = repository.importGoogleTasks(event.selectedTasks)
+                    _uiState.update {
+                        it.copy(
+                            isGoogleTasksSheetOpen = false,
+                            googleTasksImportedCount = count,
+                            shareSuccessMessage = "Successfully imported $count items from Google Tasks!"
+                        )
+                    }
+                }
+            }
+            is BasketUiEvent.OnDismissImportSuccessToast -> {
+                _uiState.update { it.copy(googleTasksImportedCount = null) }
+            }
             is BasketUiEvent.OnRetryClicked -> {
                 loadData()
             }
             else -> {
                 // Navigation events handled by screen callbacks
+            }
+        }
+    }
+
+    private fun loadGoogleTasksForSelectedList(listId: String? = null) {
+        val targetListId = listId
+            ?: _uiState.value.googleTasksAuthState.selectedListId
+            ?: _uiState.value.availableGoogleTaskLists.firstOrNull()?.id
+            ?: "list_groceries"
+        viewModelScope.launch {
+            repository.getGoogleTasksForList(targetListId).collect { tasks ->
+                _uiState.update { it.copy(googleTasksInSelectedList = tasks) }
             }
         }
     }
@@ -111,13 +164,17 @@ class BasketViewModel(
             combine(
                 repository.getShoppingBasket(),
                 repository.getSavedShoppingLists(),
-                repository.getPriceWatchAlerts()
-            ) { basket, savedLists, alerts ->
+                repository.getPriceWatchAlerts(),
+                repository.getGoogleTasksAuthState(),
+                repository.getGoogleTaskLists()
+            ) { basket, savedLists, alerts, googleAuth, googleLists ->
                 _uiState.value.copy(
                     isLoading = false,
                     basket = basket,
                     savedLists = savedLists,
-                    priceWatchAlerts = alerts
+                    priceWatchAlerts = alerts,
+                    googleTasksAuthState = googleAuth,
+                    availableGoogleTaskLists = googleLists
                 )
             }.catch { ex ->
                 _uiState.update {
@@ -128,7 +185,11 @@ class BasketViewModel(
                 }
             }.collect { state ->
                 _uiState.value = state
+                if (state.googleTasksInSelectedList.isEmpty()) {
+                    loadGoogleTasksForSelectedList(state.googleTasksAuthState.selectedListId)
+                }
             }
         }
     }
 }
+

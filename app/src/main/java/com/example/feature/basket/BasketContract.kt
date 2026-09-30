@@ -1,6 +1,9 @@
 package com.example.feature.basket
 
 import androidx.compose.runtime.Immutable
+import com.example.core.model.GoogleTaskItem
+import com.example.core.model.GoogleTaskList
+import com.example.core.model.GoogleTasksAuthState
 import com.example.core.model.PriceWatchAlert
 import com.example.core.model.SavedShoppingList
 import com.example.core.model.ShoppingBasket
@@ -21,7 +24,12 @@ data class BasketUiState(
     val savedLists: List<SavedShoppingList> = emptyList(),
     val priceWatchAlerts: List<PriceWatchAlert> = emptyList(),
     val selectedRecommendationIndex: Int = 0, // 0 = 2-Store Split (Max Savings), 1 = 1-Store Run (Fastest)
-    val shareSuccessMessage: String? = null
+    val shareSuccessMessage: String? = null,
+    val isGoogleTasksSheetOpen: Boolean = false,
+    val googleTasksAuthState: GoogleTasksAuthState = GoogleTasksAuthState(),
+    val availableGoogleTaskLists: List<GoogleTaskList> = emptyList(),
+    val googleTasksInSelectedList: List<GoogleTaskItem> = emptyList(),
+    val googleTasksImportedCount: Int? = null
 ) {
     val isEmpty: Boolean
         get() = !isLoading && errorMessage == null && (basket == null || basket.items.isEmpty())
@@ -48,8 +56,16 @@ sealed interface BasketUiEvent {
     data class OnLoadSavedList(val listId: String) : BasketUiEvent
     data object OnShareListClicked : BasketUiEvent
     data object OnDismissShareToast : BasketUiEvent
+    data object OnOpenGoogleTasksSheet : BasketUiEvent
+    data object OnDismissGoogleTasksSheet : BasketUiEvent
+    data class OnConnectGoogleTasks(val email: String) : BasketUiEvent
+    data object OnDisconnectGoogleTasks : BasketUiEvent
+    data class OnSelectGoogleTaskList(val listId: String) : BasketUiEvent
+    data class OnImportGoogleTasks(val selectedTasks: List<GoogleTaskItem>) : BasketUiEvent
+    data object OnDismissImportSuccessToast : BasketUiEvent
     data object OnRetryClicked : BasketUiEvent
     data object OnBackClicked : BasketUiEvent
     data class OnBottomNavClicked(val destination: BottomBarDestination) : BasketUiEvent
 }
+
 

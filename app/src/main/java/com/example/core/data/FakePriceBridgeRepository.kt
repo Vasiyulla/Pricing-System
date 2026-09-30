@@ -1,6 +1,9 @@
 package com.example.core.data
 
 import com.example.core.model.Category
+import com.example.core.model.GoogleTaskItem
+import com.example.core.model.GoogleTaskList
+import com.example.core.model.GoogleTasksAuthState
 import com.example.core.model.KarmaVerificationPrompt
 import com.example.core.model.LocationInfo
 import com.example.core.model.PriceStatusBadgeType
@@ -12,6 +15,7 @@ import com.example.core.model.ShoppingBasket
 import com.example.core.model.ShoppingListItem
 import com.example.core.model.SmartBasketSummary
 import com.example.core.model.Store
+import com.example.core.model.StoreClaimStatus
 import com.example.core.model.StorePrice
 import com.example.core.model.StoreRecommendation
 import com.example.core.model.StoreSplitSummary
@@ -63,15 +67,183 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
         )
     )
 
-    // ── Nearby Stores ──
+    // ── Nearby Stores (Phase 4 Rich Profiles) ──
     private val nearbyStores = MutableStateFlow(
         listOf(
-            Store("nilgiris_indiranagar", "Nilgiris Supermarket", "100ft Rd, Indiranagar", "0.6 km"),
-            Store("apna_bazar", "Apna Bazar Kirana", "CMH Rd, Indiranagar", "0.3 km"),
-            Store("reliance_indiranagar", "Reliance Smart", "12th Main, Indiranagar", "1.1 km"),
-            Store("dmart_koramangala", "DMart", "80ft Rd, Koramangala", "2.3 km"),
-            Store("more_supermarket", "More Supermarket", "100ft Rd, Indiranagar", "0.8 km"),
-            Store("bigbasket_hub", "BigBasket Collection Point", "Domlur, Indiranagar", "1.4 km")
+            Store(
+                id = "apna_bazar",
+                name = "Apna Bazar Kirana",
+                address = "CMH Rd, Indiranagar",
+                distanceFormatted = "0.3 km",
+                isOpen = true,
+                operatingHours = "7:30 AM - 10:30 PM",
+                phone = "+91 98450 12345",
+                reliabilityScore = 98,
+                isStoreConfirmedPartner = false,
+                claimStatus = StoreClaimStatus.UNCLAIMED,
+                totalObservationsCount = 245,
+                verifiedPricesCount = 68,
+                recentDiscrepancyCount = 0,
+                activeWarningNotice = null,
+                categoryTags = listOf("Kirana", "Dairy", "Grains & Pulses")
+            ),
+            Store(
+                id = "nilgiris_indiranagar",
+                name = "Nilgiris Supermarket",
+                address = "100ft Rd, Indiranagar",
+                distanceFormatted = "0.6 km",
+                isOpen = true,
+                operatingHours = "8:00 AM - 10:00 PM",
+                phone = "+91 80 2525 8899",
+                reliabilityScore = 94,
+                isStoreConfirmedPartner = true,
+                claimStatus = StoreClaimStatus.VERIFIED_PARTNER,
+                totalObservationsCount = 412,
+                verifiedPricesCount = 120,
+                recentDiscrepancyCount = 0,
+                activeWarningNotice = null,
+                categoryTags = listOf("Supermarket", "Bakery", "Imported Goods")
+            ),
+            Store(
+                id = "more_supermarket",
+                name = "More Supermarket",
+                address = "100ft Rd, Indiranagar",
+                distanceFormatted = "0.8 km",
+                isOpen = true,
+                operatingHours = "7:00 AM - 11:00 PM",
+                phone = "+91 80 4120 5566",
+                reliabilityScore = 91,
+                isStoreConfirmedPartner = false,
+                claimStatus = StoreClaimStatus.UNCLAIMED,
+                totalObservationsCount = 310,
+                verifiedPricesCount = 84,
+                recentDiscrepancyCount = 1,
+                activeWarningNotice = null,
+                categoryTags = listOf("Supermarket", "Fruits & Veggies", "Packaged Staples")
+            ),
+            Store(
+                id = "reliance_indiranagar",
+                name = "Reliance Smart",
+                address = "12th Main, Indiranagar",
+                distanceFormatted = "1.1 km",
+                isOpen = true,
+                operatingHours = "8:00 AM - 10:00 PM",
+                phone = "+91 80 2521 9900",
+                reliabilityScore = 82,
+                isStoreConfirmedPartner = false,
+                claimStatus = StoreClaimStatus.CLAIMED_BY_MERCHANT,
+                totalObservationsCount = 520,
+                verifiedPricesCount = 140,
+                recentDiscrepancyCount = 3,
+                activeWarningNotice = "2 shoppers recently reported price differences at checkout. Confirm price before paying.",
+                categoryTags = listOf("Hypermarket", "Discounts", "FMCG")
+            ),
+            Store(
+                id = "bigbasket_hub",
+                name = "BigBasket Collection Point",
+                address = "Domlur, Indiranagar",
+                distanceFormatted = "1.4 km",
+                isOpen = true,
+                operatingHours = "6:00 AM - 11:00 PM",
+                phone = "+91 80 6700 8000",
+                reliabilityScore = 95,
+                isStoreConfirmedPartner = true,
+                claimStatus = StoreClaimStatus.VERIFIED_PARTNER,
+                totalObservationsCount = 380,
+                verifiedPricesCount = 95,
+                recentDiscrepancyCount = 0,
+                activeWarningNotice = null,
+                categoryTags = listOf("Online Pickup", "Instant Staples")
+            ),
+            Store(
+                id = "dmart_koramangala",
+                name = "DMart",
+                address = "80ft Rd, Koramangala",
+                distanceFormatted = "2.3 km",
+                isOpen = true,
+                operatingHours = "9:00 AM - 10:00 PM",
+                phone = "+91 80 2553 4400",
+                reliabilityScore = 96,
+                isStoreConfirmedPartner = true,
+                claimStatus = StoreClaimStatus.VERIFIED_PARTNER,
+                totalObservationsCount = 680,
+                verifiedPricesCount = 210,
+                recentDiscrepancyCount = 0,
+                activeWarningNotice = null,
+                categoryTags = listOf("Wholesale", "Mega Savings", "Household")
+            )
+        )
+    )
+
+    // ── Google Tasks Mock State (Phase 4) ──
+    private val googleTasksAuthState = MutableStateFlow(
+        GoogleTasksAuthState(
+            isConnected = false,
+            connectedAccountEmail = null,
+            selectedListId = "list_groceries"
+        )
+    )
+
+    private val googleTaskLists = MutableStateFlow(
+        listOf(
+            GoogleTaskList("list_groceries", "Weekly Groceries", taskCount = 4, updatedRelativeTime = "2h ago"),
+            GoogleTaskList("list_essentials", "Home Essentials", taskCount = 3, updatedRelativeTime = "Yesterday"),
+            GoogleTaskList("list_weekend", "Weekend BBQ & Snacks", taskCount = 5, updatedRelativeTime = "3 days ago")
+        )
+    )
+
+    private val mockGoogleTasksMap = mapOf(
+        "list_groceries" to listOf(
+            GoogleTaskItem(
+                id = "gt_1",
+                rawTitle = "Aashirvaad Shudh Chakki Atta 5kg",
+                isSelected = true,
+                matchConfidence = 0.98f,
+                suggestedQuantity = 1,
+                suggestedUnit = "5kg"
+            ),
+            GoogleTaskItem(
+                id = "gt_2",
+                rawTitle = "Amul Butter 500g pack",
+                isSelected = true,
+                matchConfidence = 0.95f,
+                suggestedQuantity = 1,
+                suggestedUnit = "500g"
+            ),
+            GoogleTaskItem(
+                id = "gt_3",
+                rawTitle = "Tata Salt 1kg",
+                isSelected = true,
+                matchConfidence = 0.96f,
+                suggestedQuantity = 1,
+                suggestedUnit = "1kg"
+            ),
+            GoogleTaskItem(
+                id = "gt_4",
+                rawTitle = "Organic Brown Eggs 6 pack",
+                isSelected = true,
+                matchConfidence = 0.88f,
+                suggestedQuantity = 1,
+                suggestedUnit = "6 pack"
+            )
+        ),
+        "list_essentials" to listOf(
+            GoogleTaskItem(
+                id = "gt_5",
+                rawTitle = "Dhara Sunflower Oil 1L",
+                isSelected = true,
+                matchConfidence = 0.94f,
+                suggestedQuantity = 2,
+                suggestedUnit = "1L"
+            ),
+            GoogleTaskItem(
+                id = "gt_6",
+                rawTitle = "Dishwash Gel 500ml",
+                isSelected = true,
+                matchConfidence = 0.82f,
+                suggestedQuantity = 1,
+                suggestedUnit = "500ml"
+            )
         )
     )
 
@@ -928,6 +1100,93 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
         }
     }
 
+    // ── Phase 4: Store Ecosystem & Discrepancies ──
+    override fun getNearbyStores(): Flow<List<Store>> = nearbyStores.asStateFlow()
+
+    override fun getStoreById(storeId: String): Flow<Store?> {
+        return nearbyStores.map { list -> list.find { it.id == storeId } }
+    }
+
+    override fun getStorePrices(storeId: String): Flow<List<StorePrice>> {
+        return allProducts.map { prodList ->
+            prodList.mapNotNull { prod ->
+                if (prod.bestStorePrice.storeId == storeId) {
+                    prod.bestStorePrice
+                } else {
+                    prod.alternativePrices.find { it.storeId == storeId }
+                }
+            }
+        }
+    }
+
+    override suspend fun requestPreVisitPriceCheck(storeId: String, productId: String?): Boolean {
+        // Broadcasts real-time price verification ping to nearby community shoppers
+        return true
+    }
+
+    override suspend fun claimStore(storeId: String, merchantName: String, contactPhone: String): Boolean {
+        val current = nearbyStores.value.toMutableList()
+        val index = current.indexOfFirst { it.id == storeId }
+        if (index != -1) {
+            val existing = current[index]
+            current[index] = existing.copy(
+                claimStatus = StoreClaimStatus.CLAIMED_BY_MERCHANT,
+                isStoreConfirmedPartner = true
+            )
+            nearbyStores.value = current
+            return true
+        }
+        return false
+    }
+
+    // ── Phase 4: Google Tasks Integration ──
+    override fun getGoogleTasksAuthState(): Flow<GoogleTasksAuthState> = googleTasksAuthState.asStateFlow()
+
+    override suspend fun connectGoogleTasks(email: String): Boolean {
+        googleTasksAuthState.value = GoogleTasksAuthState(
+            isConnected = true,
+            connectedAccountEmail = email,
+            selectedListId = "list_groceries"
+        )
+        return true
+    }
+
+    override suspend fun disconnectGoogleTasks(): Boolean {
+        googleTasksAuthState.value = GoogleTasksAuthState(
+            isConnected = false,
+            connectedAccountEmail = null,
+            selectedListId = null
+        )
+        return true
+    }
+
+    override fun getGoogleTaskLists(): Flow<List<GoogleTaskList>> = googleTaskLists.asStateFlow()
+
+    override fun getGoogleTasksForList(listId: String): Flow<List<GoogleTaskItem>> {
+        return allProducts.map { prods ->
+            val tasks = mockGoogleTasksMap[listId] ?: emptyList()
+            tasks.map { task ->
+                val matched = prods.find { prod ->
+                    prod.name.contains(task.rawTitle.split(" ").firstOrNull() ?: "", ignoreCase = true)
+                } ?: prods.firstOrNull()
+                task.copy(matchedProduct = matched)
+            }
+        }
+    }
+
+    override suspend fun importGoogleTasks(selectedTasks: List<GoogleTaskItem>): Int {
+        var addedCount = 0
+        selectedTasks.forEach { task ->
+            addShoppingItem(
+                name = task.matchedProduct?.name ?: task.rawTitle,
+                quantity = task.suggestedQuantity,
+                packageSize = task.suggestedUnit
+            )
+            addedCount++
+        }
+        return addedCount
+    }
+
     // ── Settings ──
     override suspend fun updateLocation(neighborhood: String, radiusKm: Double) {
         currentLocation.value = LocationInfo(
@@ -944,3 +1203,4 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
         }
     }
 }
+
