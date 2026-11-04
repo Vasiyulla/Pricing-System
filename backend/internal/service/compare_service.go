@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"golang.org/x/sync/singleflight"
 	"pricebridge/backend/internal/domain"
 	"pricebridge/backend/internal/repository"
 )
@@ -14,6 +15,7 @@ import (
 type CompareService struct {
 	storeRepo repository.StoreRepository
 	priceRepo repository.PriceRepository
+	requestGroup singleflight.Group
 }
 
 func NewCompareService(storeRepo repository.StoreRepository, priceRepo repository.PriceRepository) *CompareService {
@@ -23,8 +25,19 @@ func NewCompareService(storeRepo repository.StoreRepository, priceRepo repositor
 	}
 }
 
-// CompareProductAcrossStores fetches and ranks prices across nearby stores for a product
+// CompareProductAcrossStores fetches and ranks prices across nearby stores for a product, protected by singleflight deduplication
 func (s *CompareService) CompareProductAcrossStores(ctx context.Context, productID string, userLat, userLon, radiusKm float64, userLoyaltySchemes map[domain.LoyaltyScheme]bool) ([]domain.StorePriceComparison, error) {
+	key := fmt.Sprintf("%s:%.3f:%.3f:%.1f", productID, userLat, userLon, radiusKm)
+	res, err, _ := s.requestGroup.Do(key, func() (interface{}, error) {
+		return s.computeComparison(ctx, productID, userLat, userLon, radiusKm, userLoyaltySchemes)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return res.([]domain.StorePriceComparison), nil
+}
+
+func (s *CompareService) computeComparison(ctx context.Context, productID string, userLat, userLon, radiusKm float64, userLoyaltySchemes map[domain.LoyaltyScheme]bool) ([]domain.StorePriceComparison, error) {
 	nearbyStores, err := s.storeRepo.GetNearby(ctx, userLat, userLon, radiusKm)
 	if err != nil {
 		return nil, err

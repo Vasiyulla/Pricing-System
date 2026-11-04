@@ -25,15 +25,38 @@ func main() {
 	log.Printf("Target Market: United Kingdom (London, GBP £ / pence)")
 	log.Printf("----------------------------------------------------------------")
 
-	// 1. Initialize Storage with London Supermarket Seed Data
-	memStore := repository.NewMemoryStore()
-	storeRepo := memStore.StoreRepo()
-	prodRepo := memStore.ProductRepo()
-	priceRepo := memStore.PriceRepo()
-	bountyRepo := memStore.BountyRepo()
-	stickerRepo := memStore.YellowStickerRepo()
+	// 1. Initialize Storage (PostgreSQL 16 + PostGIS if DATABASE_URL is set, else Memory fallback)
+	var storeRepo repository.StoreRepository
+	var prodRepo repository.ProductRepository
+	var priceRepo repository.PriceRepository
+	var bountyRepo repository.BountyRepository
+	var stickerRepo repository.YellowStickerRepository
 
-	log.Printf("Initialized in-memory store with 10 London Supermarkets and 25 Staple Products")
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL != "" {
+		log.Printf("DATABASE_URL detected. Connecting to PostgreSQL 16 + PostGIS...")
+		pgStore, err := repository.NewPostgresStore(context.Background(), databaseURL)
+		if err != nil {
+			log.Fatalf("Fatal: Failed to connect to PostgreSQL: %v", err)
+		}
+		defer pgStore.Close()
+
+		storeRepo = pgStore.StoreRepo()
+		prodRepo = pgStore.ProductRepo()
+		priceRepo = pgStore.PriceRepo()
+		bountyRepo = pgStore.BountyRepo()
+		stickerRepo = pgStore.YellowStickerRepo()
+		log.Printf("Storage Engine: PostgreSQL 16 + PostGIS with persistent append-only ledger")
+	} else {
+		log.Printf("DATABASE_URL not set. Initializing in-memory store...")
+		memStore := repository.NewMemoryStore()
+		storeRepo = memStore.StoreRepo()
+		prodRepo = memStore.ProductRepo()
+		priceRepo = memStore.PriceRepo()
+		bountyRepo = memStore.BountyRepo()
+		stickerRepo = memStore.YellowStickerRepo()
+		log.Printf("Storage Engine: In-memory store (10 London Supermarkets, 25 Staple Products)")
+	}
 
 	// 2. Initialize Services
 	compareSvc := service.NewCompareService(storeRepo, priceRepo)
