@@ -431,7 +431,7 @@ private fun GoogleTasksSelectionView(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "Matched: ${task.matchedProduct.name} (Best ₹${task.matchedProduct.bestStorePrice.price.toInt()})",
+                                        text = "Matched: ${task.matchedProduct.name} (Best £${task.matchedProduct.bestStorePrice.price.toInt()})",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = Color(0xFF1B873F),
                                         maxLines = 1,

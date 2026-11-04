@@ -162,7 +162,7 @@ fun SettingsBottomSheet(
 
                 SettingsSwitchRow(
                     title = "Freshness & Verification Prompts",
-                    description = "Alert when a price I frequently view might be outdated (\"Still ₹X?\")",
+                    description = "Alert when a price I frequently view might be outdated (\"Still £X?\")",
                     checked = notifyFreshnessAlerts,
                     onCheckedChange = onToggleFreshnessNotifs
                 )

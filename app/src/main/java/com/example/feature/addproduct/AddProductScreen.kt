@@ -278,7 +278,7 @@ fun AddProductContent(
                                                 fontWeight = FontWeight.SemiBold
                                             )
                                             Text(
-                                                text = "${existing.quantityDescription} • Best ₹${existing.bestStorePrice?.price?.toInt() ?: "--"}",
+                                                text = "${existing.quantityDescription} • Best £${existing.bestStorePrice?.price?.toInt() ?: "--"}",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -388,7 +388,7 @@ fun AddProductContent(
                 }
             }
 
-            // MRP (₹)
+            // MRP (£)
             Column {
                 Text(
                     text = stringResource(R.string.add_product_mrp_label),

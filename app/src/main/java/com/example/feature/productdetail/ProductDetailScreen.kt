@@ -697,7 +697,7 @@ private fun StorePriceCard(
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
-                            text = "Corrected from ₹${storePrice.supersededPrice.toInt()} (superseded row) • ${storePrice.correctionHistoryCount} edit(s)",
+                            text = "Corrected from £${storePrice.supersededPrice.toInt()} (superseded row) • ${storePrice.correctionHistoryCount} edit(s)",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -905,7 +905,7 @@ private fun DiscrepancyBottomSheet(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "At ${storePrice.storeName} • Listed ₹${String.format("%.0f", storePrice.price)}",
+                        text = "At ${storePrice.storeName} • Listed £${String.format("%.0f", storePrice.price)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

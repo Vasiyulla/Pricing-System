@@ -9,7 +9,7 @@ data class PriceSubmission(
     val storeName: String,
     val price: Double,
     val mrp: Double,
-    val currencySymbol: String = "₹",
+    val currencySymbol: String = "£",
     val sourceType: String,
     val submittedRelativeTime: String,
     val statusBadge: PriceStatusBadgeType

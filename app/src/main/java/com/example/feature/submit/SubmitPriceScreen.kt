@@ -335,7 +335,7 @@ fun SubmitPriceContent(
                     OutlinedTextField(
                         value = uiState.priceText,
                         onValueChange = { onEvent(SubmitPriceUiEvent.OnPriceChanged(it)) },
-                        placeholder = { Text("₹ 0.00") },
+                        placeholder = { Text("£ 0.00") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -360,7 +360,7 @@ fun SubmitPriceContent(
                     OutlinedTextField(
                         value = uiState.mrpText,
                         onValueChange = { onEvent(SubmitPriceUiEvent.OnMrpChanged(it)) },
-                        placeholder = { Text("₹ 0.00") },
+                        placeholder = { Text("£ 0.00") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(

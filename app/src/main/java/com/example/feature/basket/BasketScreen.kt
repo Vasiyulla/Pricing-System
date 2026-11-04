@@ -693,9 +693,9 @@ private fun RecommendationSelectorCard(
                 basket.twoStoreRecommendation?.let { rec ->
                     RecommendationChoiceChip(
                         title = "2-Store Split",
-                        badge = "Save ₹${rec.savingsVsSingleStore.toInt()}",
+                        badge = "Save £${rec.savingsVsSingleStore.toInt()}",
                         subtitle = "${rec.primaryStoreName} + ${rec.secondaryStoreName}",
-                        cost = "₹${rec.totalEstimatedCost.toInt()}",
+                        cost = "£${rec.totalEstimatedCost.toInt()}",
                         isSelected = selectedIndex == 0,
                         onClick = { onSelectIndex(0) },
                         modifier = Modifier.weight(1f)
@@ -708,7 +708,7 @@ private fun RecommendationSelectorCard(
                         title = "1-Store Run",
                         badge = "Single Stop",
                         subtitle = "${rec.primaryStoreName} (${rec.primaryStoreDistance})",
-                        cost = "₹${rec.totalEstimatedCost.toInt()}",
+                        cost = "£${rec.totalEstimatedCost.toInt()}",
                         isSelected = selectedIndex == 1,
                         onClick = { onSelectIndex(1) },
                         modifier = Modifier.weight(1f)
@@ -852,7 +852,7 @@ private fun ShoppingListItemCard(
                         modifier = Modifier.padding(top = 2.dp)
                     ) {
                         Text(
-                            text = "${item.packageSize} • ₹${item.bestStorePrice.toInt()}/unit",
+                            text = "${item.packageSize} • £${item.bestStorePrice.toInt()}/unit",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1035,7 +1035,7 @@ private fun SavedListsSection(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "${list.itemCount} items • Est. total ₹${list.estimatedTotal.toInt()} • Run: ${list.lastRunDate}",
+                            text = "${list.itemCount} items • Est. total £${list.estimatedTotal.toInt()} • Run: ${list.lastRunDate}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1122,7 +1122,7 @@ private fun PriceWatchSection(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "${alert.packageSize} • Target: ₹${alert.targetPrice.toInt()} • Current: ₹${alert.currentBestPrice.toInt()} at ${alert.currentBestStore}",
+                            text = "${alert.packageSize} • Target: £${alert.targetPrice.toInt()} • Current: £${alert.currentBestPrice.toInt()} at ${alert.currentBestStore}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1466,7 +1466,7 @@ private val previewBasket = ShoppingBasket(
         secondaryItemCount = 1,
         totalEstimatedCost = 286.0,
         savingsVsSingleStore = 74.0,
-        badgeLabel = "Max Savings • Save ₹74"
+        badgeLabel = "Max Savings • Save £74"
     )
 )
 

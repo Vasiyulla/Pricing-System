@@ -2,7 +2,7 @@ package com.example.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.data.FakePriceBridgeRepository
+import com.example.core.data.PriceBridgeRepositoryProvider
 import com.example.core.data.PriceBridgeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class ProfileViewModel(
-    private val repository: PriceBridgeRepository = FakePriceBridgeRepository()
+    private val repository: PriceBridgeRepository = PriceBridgeRepositoryProvider.repository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState(isLoading = true))

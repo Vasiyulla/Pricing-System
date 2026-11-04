@@ -10,8 +10,8 @@
     <string name="status_flagged_for_review">Flagged for review</string>
 
     <!-- Top Bar & Search -->
-    <string name="default_location_title">Indiranagar, 100ft Rd</string>
-    <string name="default_radius_tag">1.5 km radius</string>
+    <string name="default_location_title">Camden High St, London</string>
+    <string name="default_radius_tag">2.0 mi radius</string>
     <string name="live_prices_indicator">Live prices</string>
     <string name="search_placeholder">Search products, groceries, medicine…</string>
     <string name="cd_notifications">Notifications</string>
@@ -26,7 +26,7 @@
     <string name="hero_badge_label">Smart Basket Optimization</string>
     <string name="hero_title_prefix">You could save</string>
     <string name="hero_title_suffix">on groceries today</string>
-    <string name="hero_savings_amount">~₹%1$.0f</string>
+    <string name="hero_savings_amount">~£%1$.0f</string>
     <string name="hero_compared_info">Compared across %1$d nearby stores including %2$s. %3$d items in %4$s</string>
     <string name="hero_crowd_tags">Real-time crowd tags · %1$d stores compared</string>
     <string name="btn_view_basket_deals">View Basket Deals</string>
@@ -35,12 +35,12 @@
     <string name="section_best_deals_title">Best Deals Near You</string>
     <string name="section_best_deals_subtitle">Live store differences in %1$s</string>
     <string name="btn_view_all">View All</string>
-    <string name="save_amount_percent">Save ₹%1$.0f (%2$d%% off)</string>
+    <string name="save_amount_percent">Save £%1$.0f (%2$d%% off)</string>
     <string name="lowest_in_radius">Lowest in %1$s</string>
     <string name="compare_stores_action">Compare %1$d Stores</string>
     <string name="btn_view_store">View Store</string>
-    <string name="price_format">₹%1$.2f</string>
-    <string name="mrp_format">₹%1$.2f</string>
+    <string name="price_format">£%1$.2f</string>
+    <string name="mrp_format">£%1$.2f</string>
     <string name="meta_dot">·</string>
 
     <!-- Community Verification Section -->
@@ -69,7 +69,7 @@
     <string name="capture_product_name_placeholder">e.g. Fortune Sunlite Sunflower Oil</string>
     <string name="capture_store_name_label">Store Name</string>
     <string name="capture_store_name_placeholder">e.g. More Supermarket, Indiranagar</string>
-    <string name="capture_price_label">Selling Price (₹)</string>
+    <string name="capture_price_label">Selling Price (£)</string>
     <string name="capture_unit_label">Pack Size / Unit</string>
     <string name="capture_evidence_type_label">Evidence Type</string>
     <string name="capture_evidence_shelf">Shelf Tag</string>
@@ -95,8 +95,8 @@
     <string name="shopping_list_title">Smart Shopping Basket</string>
     <string name="shopping_list_subtitle">%1$d items · Indiranagar cluster</string>
     <string name="label_estimated_total">Estimated total</string>
-    <string name="label_single_store_total">Single-store estimated: ₹%1$.2f</string>
-    <string name="label_savings_optimized">Save ~₹%1$.0f with store split</string>
+    <string name="label_single_store_total">Single-store estimated: £%1$.2f</string>
+    <string name="label_savings_optimized">Save ~£%1$.0f with store split</string>
     <string name="section_store_splits">Optimized Store Routing</string>
     <string name="btn_add_item">Add Item</string>
     <string name="dialog_add_item_title">Add to Shopping List</string>
@@ -110,7 +110,7 @@
     <string name="btn_add_first_item">Add Your First Item</string>
     <string name="cd_check_item">Mark item as bought</string>
     <string name="cd_delete_item">Delete item</string>
-    <string name="store_split_item_count">%1$d items · ₹%2$.2f</string>
+    <string name="store_split_item_count">%1$d items · £%2$.2f</string>
     <string name="cd_back_to_home">Back to Home</string>
 
     <!-- Search Screen -->
@@ -133,8 +133,8 @@
     <string name="submit_product_label">Product</string>
     <string name="submit_product_placeholder">Search for a product…</string>
     <string name="submit_store_label">Nearby Store</string>
-    <string name="submit_price_label">Selling Price (₹)</string>
-    <string name="submit_mrp_label">MRP (₹)</string>
+    <string name="submit_price_label">Selling Price (£)</string>
+    <string name="submit_mrp_label">MRP (£)</string>
     <string name="submit_source_label">How did you observe this price?</string>
     <string name="btn_submit_price">Submit Price</string>
     <string name="submit_disclaimer">Community prices are never presented as guaranteed. Your submission helps neighbours compare honestly.</string>
@@ -153,9 +153,9 @@
     <string name="profile_recent_submissions">Recent Submissions</string>
 
     <!-- Freshness Verification Prompt (Plan Section 2) -->
-    <string name="prompt_still_price_title">Still ₹%1$.0f at %2$s?</string>
+    <string name="prompt_still_price_title">Still £%1$.0f at %2$s?</string>
     <string name="prompt_still_price_subtitle">This price was observed %1$s. Help your neighbors keep prices accurate!</string>
-    <string name="btn_yes_still_price">Yes, Still ₹%1$.0f</string>
+    <string name="btn_yes_still_price">Yes, Still £%1$.0f</string>
     <string name="btn_no_price_changed">Price Changed</string>
     <string name="freshness_confirmed_toast">Thank you! Price verified for %1$s. +5 Points earned.</string>
 
@@ -170,7 +170,7 @@
     <string name="discrepancy_reason_store_refused">Store refused to honor price</string>
     <string name="discrepancy_reason_out_of_stock">Item out of stock / unavailable</string>
     <string name="discrepancy_notes_label">Additional details (optional)</string>
-    <string name="discrepancy_notes_placeholder">e.g. Counter said ₹155 instead of ₹142 today morning</string>
+    <string name="discrepancy_notes_placeholder">e.g. Counter said £155 instead of £142 today morning</string>
     <string name="btn_submit_discrepancy">Report Discrepancy</string>
     <string name="discrepancy_success_toast">Discrepancy reported. Community trust score updated. +10 Points earned.</string>
 
@@ -192,7 +192,7 @@
     <string name="add_product_category_label">Category</string>
     <string name="add_product_pack_label">Package Size / Unit</string>
     <string name="add_product_pack_placeholder">e.g. 1L Pouch, 5kg Bag, 500g</string>
-    <string name="add_product_mrp_label">MRP (₹)</string>
+    <string name="add_product_mrp_label">MRP (£)</string>
     <string name="add_product_barcode_label">Barcode (Optional)</string>
     <string name="btn_save_and_submit_price">Save &amp; Report Price</string>
 

@@ -9,9 +9,8 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    // 10.0.2.2 points to host machine's localhost from the Android emulator.
-    // For Cloudflare Tunnel, set this to e.g. "https://api.yourdomain.com/"
-    private var baseUrl: String = "http://10.0.2.2:8080/"
+    // Production backend on Render
+    private var baseUrl: String = "https://pricing-system-4nhl.onrender.com/"
 
     fun setBaseUrl(url: String) {
         baseUrl = if (url.endsWith("/")) url else "$url/"

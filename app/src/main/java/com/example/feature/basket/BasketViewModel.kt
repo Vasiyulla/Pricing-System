@@ -2,7 +2,7 @@ package com.example.feature.basket
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.data.FakePriceBridgeRepository
+import com.example.core.data.PriceBridgeRepositoryProvider
 import com.example.core.data.PriceBridgeRepository
 import com.example.core.model.ShoppingTaskTab
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class BasketViewModel(
-    private val repository: PriceBridgeRepository = FakePriceBridgeRepository()
+    private val repository: PriceBridgeRepository = PriceBridgeRepositoryProvider.repository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BasketUiState(isLoading = true))
@@ -68,9 +68,9 @@ class BasketViewModel(
                 if (basket != null && basket.items.isNotEmpty()) {
                     val summary = buildString {
                         append("🛒 Price Bridge Shopping Task\n")
-                        append("Estimated Total: ₹${basket.optimizedEstimatedTotal.toInt()} (Save ₹${basket.estimatedSavingsAmount.toInt()})\n\n")
+                        append("Estimated Total: £${basket.optimizedEstimatedTotal.toInt()} (Save £${basket.estimatedSavingsAmount.toInt()})\n\n")
                         basket.items.forEachIndexed { i, item ->
-                            append("${i + 1}. ${item.productName} (${item.packageSize}) x${item.quantity} — Best at ${item.bestStoreName} (₹${item.estimatedItemTotal.toInt()})\n")
+                            append("${i + 1}. ${item.productName} (${item.packageSize}) x${item.quantity} — Best at ${item.bestStoreName} (£${item.estimatedItemTotal.toInt()})\n")
                         }
                         append("\nCompare nearby prices on Price Bridge")
                     }

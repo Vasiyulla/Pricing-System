@@ -2,7 +2,7 @@ package com.example.feature.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.data.FakePriceBridgeRepository
+import com.example.core.data.PriceBridgeRepositoryProvider
 import com.example.core.data.PriceBridgeRepository
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(FlowPreview::class)
 class SearchViewModel(
-    private val repository: PriceBridgeRepository = FakePriceBridgeRepository()
+    private val repository: PriceBridgeRepository = PriceBridgeRepositoryProvider.repository
 ) : ViewModel() {
 
     private val queryFlow = MutableStateFlow("")

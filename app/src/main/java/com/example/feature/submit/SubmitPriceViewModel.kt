@@ -2,7 +2,7 @@ package com.example.feature.submit
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.data.FakePriceBridgeRepository
+import com.example.core.data.PriceBridgeRepositoryProvider
 import com.example.core.data.PriceBridgeRepository
 import com.example.core.model.SourceType
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 class SubmitPriceViewModel(
     private val preselectedProductId: String? = null,
-    private val repository: PriceBridgeRepository = FakePriceBridgeRepository()
+    private val repository: PriceBridgeRepository = PriceBridgeRepositoryProvider.repository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SubmitPriceUiState(isLoading = true))

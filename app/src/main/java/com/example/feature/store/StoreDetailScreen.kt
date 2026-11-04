@@ -675,14 +675,14 @@ private fun StoreInventoryItemCard(
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "₹${price.price.toInt()}",
+                    text = "£${price.price.toInt()}",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
                 if (price.mrp > price.price) {
                     Text(
-                        text = "MRP ₹${price.mrp.toInt()}",
+                        text = "MRP £${price.mrp.toInt()}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough

@@ -76,7 +76,7 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
             AppNotification(
                 id = "notif_1",
                 title = "Price Drop on Watched Item! 📉",
-                message = "Dhara Refined Sunflower Oil 1L dropped from ₹148 to ₹138 at Apna Bazar Kirana (0.3 km away).",
+                message = "Dhara Refined Sunflower Oil 1L dropped from £148 to £138 at Apna Bazar Kirana (0.3 km away).",
                 timestampRelative = "15m ago",
                 type = NotificationType.PRICE_DROP,
                 isRead = false,
@@ -86,7 +86,7 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
             AppNotification(
                 id = "notif_2",
                 title = "Price Check Broadcast Confirmed 📡",
-                message = "2 shoppers nearby confirmed that Fortune Sunflower Oil is ₹142 at Nilgiris Supermarket.",
+                message = "2 shoppers nearby confirmed that Fortune Sunflower Oil is £142 at Nilgiris Supermarket.",
                 timestampRelative = "1h ago",
                 type = NotificationType.COMMUNITY_VERIFICATION,
                 isRead = false,
@@ -882,7 +882,7 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
                 bestStorePrice = 142.0,
                 lastObservedRelativeTime = "2h ago",
                 statusBadge = PriceStatusBadgeType.CommunityCorroborated,
-                alternativeName = "Saffola Gold (₹160)",
+                alternativeName = "Saffola Gold (£160)",
                 alternativePrice = 160.0
             ),
             ShoppingListItem(
@@ -894,7 +894,7 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
                 bestStorePrice = 72.0,
                 lastObservedRelativeTime = "3h ago",
                 statusBadge = PriceStatusBadgeType.CommunityCorroborated,
-                alternativeName = "Nandini Goodlife (₹68)",
+                alternativeName = "Nandini Goodlife (£68)",
                 alternativePrice = 68.0
             ),
             ShoppingListItem(
@@ -906,7 +906,7 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
                 bestStorePrice = 325.0,
                 lastObservedRelativeTime = "Yesterday",
                 statusBadge = PriceStatusBadgeType.StoreConfirmed,
-                alternativeName = "Pillsbury Chakki Fresh (₹315)",
+                alternativeName = "Pillsbury Chakki Fresh (£315)",
                 alternativePrice = 315.0
             )
         )
@@ -960,7 +960,7 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
             savingsVsSingleStore = savings,
             missingItemsCount = 0,
             reliabilityScore = 98,
-            badgeLabel = "Max Savings • Save ₹${savings.toInt()}",
+            badgeLabel = "Max Savings • Save £${savings.toInt()}",
             isRecommended = true
         )
 

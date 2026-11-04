@@ -9,7 +9,7 @@ data class StorePrice(
     val distanceFormatted: String, // e.g. "0.6 km"
     val price: Double,
     val mrp: Double,
-    val currencySymbol: String = "₹",
+    val currencySymbol: String = "£",
     val lastObservedRelativeTime: String, // e.g. "2h ago"
     val sourceDescription: String, // e.g. "Community reported", "Verified by 4 contributors"
     val statusBadge: PriceStatusBadgeType,

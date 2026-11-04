@@ -611,7 +611,7 @@ private fun CapturedPriceFormView(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Reported Price: ₹${uiState.priceInput} (${uiState.unitInput})",
+                                text = "Reported Price: £${uiState.priceInput} (${uiState.unitInput})",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -825,7 +825,7 @@ private fun CapturedPriceFormView(
                 singleLine = true,
                 leadingIcon = {
                     Text(
-                        text = "₹",
+                        text = "£",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,

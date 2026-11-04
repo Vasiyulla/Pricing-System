@@ -2,7 +2,7 @@ package com.example.feature.addproduct
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.data.FakePriceBridgeRepository
+import com.example.core.data.PriceBridgeRepositoryProvider
 import com.example.core.data.PriceBridgeRepository
 import com.example.core.model.PriceStatusBadgeType
 import com.example.core.model.Product
@@ -17,7 +17,7 @@ import java.util.UUID
 
 class AddProductViewModel(
     initialBarcode: String? = null,
-    private val repository: PriceBridgeRepository = FakePriceBridgeRepository()
+    private val repository: PriceBridgeRepository = PriceBridgeRepositoryProvider.repository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(

@@ -571,14 +571,14 @@ private fun QueuedSubmissionCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "₹${submission.price.toInt()}",
+                    text = "£${submission.price.toInt()}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
                 if (submission.mrp > submission.price) {
                     Text(
-                        text = "₹${submission.mrp.toInt()}",
+                        text = "£${submission.mrp.toInt()}",
                         style = MaterialTheme.typography.bodySmall,
                         textDecoration = TextDecoration.LineThrough,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -588,7 +588,7 @@ private fun QueuedSubmissionCard(
                         color = Color(0xFF10B981).copy(alpha = 0.15f)
                     ) {
                         Text(
-                            text = "Save ₹${(submission.mrp - submission.price).toInt()}",
+                            text = "Save £${(submission.mrp - submission.price).toInt()}",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF10B981),
