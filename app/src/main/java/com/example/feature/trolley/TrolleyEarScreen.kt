@@ -1,5 +1,7 @@
 package com.example.feature.trolley
 
+import androidx.compose.material.icons.automirrored.filled.*
+
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -79,7 +81,7 @@ fun TrolleyEarScreen(
                 title = { Text("The Trolley Ear (Audio Copilot)") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -136,7 +138,7 @@ fun TrolleyEarScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            Icons.Default.VolumeUp,
+                            Icons.AutoMirrored.Filled.VolumeUp,
                             contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(48.dp)

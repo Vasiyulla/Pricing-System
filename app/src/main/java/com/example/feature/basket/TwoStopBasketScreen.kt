@@ -22,7 +22,7 @@ import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -167,7 +167,7 @@ fun TwoStopBasketScreen(
                         Text("Best Single Store (Sainsbury's):")
                         Text("£26.83", fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Divider(Modifier.padding(vertical = 10.dp))
+                    HorizontalDivider(Modifier.padding(vertical = 10.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Net Pocket Savings:", fontWeight = FontWeight.Bold, color = Color(0xFF1B5E20))
                         Text("£14.20 (53% Saved)", fontWeight = FontWeight.Bold, color = Color(0xFF1B5E20), fontSize = 16.sp)

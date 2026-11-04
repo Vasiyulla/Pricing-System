@@ -1,5 +1,7 @@
 package com.example.feature.bounty
 
+import androidx.compose.material.icons.automirrored.filled.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -82,7 +84,7 @@ fun BountyRadarScreen(
                 title = { Text("AI Bounty Hunter") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )

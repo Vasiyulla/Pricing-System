@@ -52,6 +52,11 @@ class NetworkPriceBridgeRepository(
     private var currentLat: Double = 51.5074
     private var currentLon: Double = -0.1278
 
+    fun setCoordinates(lat: Double, lon: Double) {
+        currentLat = lat
+        currentLon = lon
+    }
+
     private val currentLocation = MutableStateFlow(
         LocationInfo(
             neighborhood = "Camden High St, London",

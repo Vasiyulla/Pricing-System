@@ -1,5 +1,7 @@
 package com.example.feature.profile
 
+import androidx.compose.material.icons.automirrored.filled.*
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
@@ -763,7 +765,7 @@ private fun ProfileActionsCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(
-                    imageVector = if (profile.isGuest) Icons.Default.Login else Icons.Default.Logout,
+                    imageVector = if (profile.isGuest) Icons.AutoMirrored.Filled.Login else Icons.AutoMirrored.Filled.Logout,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp)
                 )

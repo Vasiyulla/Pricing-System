@@ -1,5 +1,7 @@
 package com.example.feature.yellowsticker
 
+import androidx.compose.material.icons.automirrored.filled.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -92,7 +94,7 @@ fun YellowStickerScreen(
                 title = { Text("Yellow Sticker Radar") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
