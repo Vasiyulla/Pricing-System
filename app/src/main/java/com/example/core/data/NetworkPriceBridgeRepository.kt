@@ -52,9 +52,12 @@ class NetworkPriceBridgeRepository(
     private var currentLat: Double = 51.5074
     private var currentLon: Double = -0.1278
 
-    fun setCoordinates(lat: Double, lon: Double) {
+    fun setCoordinates(lat: Double, lon: Double, neighborhood: String? = null) {
         currentLat = lat
         currentLon = lon
+        if (neighborhood != null) {
+            currentLocation.update { it.copy(neighborhood = neighborhood) }
+        }
     }
 
     private val currentLocation = MutableStateFlow(
@@ -535,10 +538,17 @@ class NetworkPriceBridgeRepository(
     // ── Mapper Extensions ──
 
     private fun NetworkStorePriceComparison.toStorePrice(): StorePrice {
+        val dist = if (this.store.distanceKm != null) {
+            val km = this.store.distanceKm
+            val mins = (km * 12).toInt().coerceAtLeast(1)
+            if (km < 1.0) "${(km * 1000).toInt()}m · ${mins}m walk" else "%.1f km · ${mins}m walk".format(km)
+        } else {
+            "Nearby"
+        }
         return StorePrice(
             storeId = this.store.id,
             storeName = this.store.name,
-            distanceFormatted = if (this.store.distanceKm != null) "%.1f km".format(this.store.distanceKm) else "Nearby",
+            distanceFormatted = dist,
             price = this.effectivePricePence / 100.0,
             mrp = this.regularPricePence / 100.0,
             currencySymbol = "£",
@@ -557,11 +567,18 @@ class NetworkPriceBridgeRepository(
     }
 
     private fun NetworkStore.toStore(): Store {
+        val dist = if (this.distanceKm != null) {
+            val km = this.distanceKm
+            val mins = (km * 12).toInt().coerceAtLeast(1)
+            if (km < 1.0) "${(km * 1000).toInt()}m · ${mins}m walk" else "%.1f km · ${mins}m walk".format(km)
+        } else {
+            "Nearby"
+        }
         return Store(
             id = this.id,
             name = this.name,
             address = "${this.address}, ${this.postcode}",
-            distanceFormatted = if (this.distanceKm != null) "%.1f km".format(this.distanceKm) else "Nearby",
+            distanceFormatted = dist,
             isOpen = true,
             operatingHours = "7:00 AM - 11:00 PM",
             phone = null,
