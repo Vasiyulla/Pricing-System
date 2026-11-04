@@ -1,10 +1,13 @@
 package com.example.core.data
 
+import com.example.core.data.local.entity.QueuedSubmissionEntity
+import com.example.core.model.AppNotification
 import com.example.core.model.Category
 import com.example.core.model.GoogleTaskItem
 import com.example.core.model.GoogleTaskList
 import com.example.core.model.GoogleTasksAuthState
 import com.example.core.model.KarmaVerificationPrompt
+import com.example.core.model.NotificationType
 import com.example.core.model.LocationInfo
 import com.example.core.model.PriceStatusBadgeType
 import com.example.core.model.PriceSubmission
@@ -64,6 +67,50 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
             storeName = "Reliance Smart",
             description = "Reliance Smart just updated fresh prices. Verify a shelf tag photo and help your neighborhood save!",
             karmaRewardPoints = 20
+        )
+    )
+
+    // ── Notifications & Alerts Feed ──
+    private val notifications = MutableStateFlow(
+        listOf(
+            AppNotification(
+                id = "notif_1",
+                title = "Price Drop on Watched Item! 📉",
+                message = "Dhara Refined Sunflower Oil 1L dropped from ₹148 to ₹138 at Apna Bazar Kirana (0.3 km away).",
+                timestampRelative = "15m ago",
+                type = NotificationType.PRICE_DROP,
+                isRead = false,
+                targetProductId = "dhara_sunflower_1l",
+                targetStoreId = "apna_bazar"
+            ),
+            AppNotification(
+                id = "notif_2",
+                title = "Price Check Broadcast Confirmed 📡",
+                message = "2 shoppers nearby confirmed that Fortune Sunflower Oil is ₹142 at Nilgiris Supermarket.",
+                timestampRelative = "1h ago",
+                type = NotificationType.COMMUNITY_VERIFICATION,
+                isRead = false,
+                targetProductId = "fortune_sunflower_1l",
+                targetStoreId = "nilgiris_indiranagar"
+            ),
+            AppNotification(
+                id = "notif_3",
+                title = "+20 Points Awarded 🏆",
+                message = "Thank you! Your verified price report at Reliance Smart helped 18 nearby shoppers save money.",
+                timestampRelative = "3h ago",
+                type = NotificationType.KARMA_REWARD,
+                isRead = true
+            ),
+            AppNotification(
+                id = "notif_4",
+                title = "Price Freshness Notice ⏱️",
+                message = "Aashirvaad Atta price at Apna Bazar was corroborated today with 98% accuracy.",
+                timestampRelative = "Yesterday",
+                type = NotificationType.FRESHNESS_ALERT,
+                isRead = true,
+                targetProductId = "aashirvaad_atta_5kg",
+                targetStoreId = "apna_bazar"
+            )
         )
     )
 
@@ -972,20 +1019,62 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
     }
 
     // ── Offline Submission Queue ──
-    private val pendingOfflineCount = MutableStateFlow(0)
-    private val queuedOfflineItems = MutableStateFlow<List<QueuedOfflineItem>>(emptyList())
-
-    data class QueuedOfflineItem(
-        val id: String,
-        val idempotencyKey: String,
-        val productId: String,
-        val storeId: String,
-        val price: Double,
-        val mrp: Double,
-        val sourceType: String
+    private val queuedSubmissionsState = MutableStateFlow<List<QueuedSubmissionEntity>>(
+        listOf(
+            QueuedSubmissionEntity(
+                id = "queue_atta_01",
+                idempotencyKey = "idemp_atta_9011",
+                productId = "aashirvaad_atta_sample",
+                productName = "Aashirvaad Superior MP Sharbati Atta 5kg",
+                storeId = "mk_retail",
+                storeName = "MK Retail, Indiranagar",
+                price = 340.0,
+                mrp = 395.0,
+                sourceType = "Receipt / OCR Capture",
+                evidencePhotoUri = "file:///sample/receipt_atta.jpg",
+                status = QueuedSubmissionEntity.STATUS_PENDING,
+                createdAt = System.currentTimeMillis() - 15 * 60 * 1000L,
+                retryCount = 0
+            ),
+            QueuedSubmissionEntity(
+                id = "queue_milk_02",
+                idempotencyKey = "idemp_milk_9022",
+                productId = "amul_milk_sample",
+                productName = "Amul Taaza Homogenised Toned Milk 1L",
+                storeId = "ganesh_provision",
+                storeName = "Ganesh Provision Store",
+                price = 54.0,
+                mrp = 56.0,
+                sourceType = "Shelf Tag Photo",
+                evidencePhotoUri = "file:///sample/shelftag_milk.jpg",
+                status = QueuedSubmissionEntity.STATUS_PENDING,
+                createdAt = System.currentTimeMillis() - 45 * 60 * 1000L,
+                retryCount = 0
+            ),
+            QueuedSubmissionEntity(
+                id = "queue_tea_03",
+                idempotencyKey = "idemp_tea_9033",
+                productId = "tata_tea_sample",
+                productName = "Tata Tea Gold 500g",
+                storeId = "nilgiris",
+                storeName = "Nilgiris Supermarket",
+                price = 290.0,
+                mrp = 330.0,
+                sourceType = "Personal Observation",
+                evidencePhotoUri = null,
+                status = QueuedSubmissionEntity.STATUS_FAILED,
+                createdAt = System.currentTimeMillis() - 2 * 60 * 60 * 1000L,
+                retryCount = 2,
+                lastAttemptAt = System.currentTimeMillis() - 10 * 60 * 1000L,
+                errorMessage = "Network timeout: Connection reset by peer. Ready to retry."
+            )
+        )
     )
+    private val pendingOfflineCount = MutableStateFlow(3)
 
     override fun getPendingOfflineSubmissionCount(): Flow<Int> = pendingOfflineCount.asStateFlow()
+
+    override fun getQueuedSubmissions(): Flow<List<QueuedSubmissionEntity>> = queuedSubmissionsState.asStateFlow()
 
     override suspend fun enqueueOfflinePrice(
         productId: String,
@@ -996,23 +1085,32 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
     ): String {
         val id = "offline_${UUID.randomUUID()}"
         val idempKey = "idemp_${UUID.randomUUID()}"
-        val item = QueuedOfflineItem(
+        val prod = allProducts.value.find { it.id == productId }
+        val store = nearbyStores.value.find { it.id == storeId }
+        val item = QueuedSubmissionEntity(
             id = id,
             idempotencyKey = idempKey,
             productId = productId,
+            productName = prod?.name ?: "Product $productId",
             storeId = storeId,
+            storeName = store?.name ?: "Store $storeId",
             price = price,
             mrp = mrp,
-            sourceType = sourceType
+            sourceType = sourceType,
+            evidencePhotoUri = null,
+            status = QueuedSubmissionEntity.STATUS_PENDING,
+            createdAt = System.currentTimeMillis()
         )
-        queuedOfflineItems.value = queuedOfflineItems.value + item
-        pendingOfflineCount.value = queuedOfflineItems.value.size
+        queuedSubmissionsState.value = queuedSubmissionsState.value + item
+        pendingOfflineCount.value = queuedSubmissionsState.value.count { it.status == QueuedSubmissionEntity.STATUS_PENDING || it.status == QueuedSubmissionEntity.STATUS_FAILED }
         return idempKey
     }
 
     override suspend fun syncOfflineSubmissions(): Int {
-        val items = queuedOfflineItems.value
+        val items = queuedSubmissionsState.value.filter { it.status != QueuedSubmissionEntity.STATUS_SYNCED }
         if (items.isEmpty()) return 0
+
+        kotlinx.coroutines.delay(600)
 
         for (item in items) {
             submitPrice(
@@ -1025,9 +1123,33 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
         }
 
         val count = items.size
-        queuedOfflineItems.value = emptyList()
+        queuedSubmissionsState.value = emptyList()
         pendingOfflineCount.value = 0
         return count
+    }
+
+    override suspend fun retryQueuedSubmission(submissionId: String): Boolean {
+        kotlinx.coroutines.delay(400)
+        val currentList = queuedSubmissionsState.value
+        val target = currentList.find { it.id == submissionId } ?: return false
+
+        submitPrice(
+            productId = target.productId,
+            storeId = target.storeId,
+            price = target.price,
+            mrp = target.mrp,
+            sourceType = target.sourceType
+        )
+
+        queuedSubmissionsState.value = currentList.filter { it.id != submissionId }
+        pendingOfflineCount.value = queuedSubmissionsState.value.count { it.status == QueuedSubmissionEntity.STATUS_PENDING || it.status == QueuedSubmissionEntity.STATUS_FAILED }
+        return true
+    }
+
+    override suspend fun cancelQueuedSubmission(submissionId: String) {
+        val currentList = queuedSubmissionsState.value
+        queuedSubmissionsState.value = currentList.filter { it.id != submissionId }
+        pendingOfflineCount.value = queuedSubmissionsState.value.count { it.status == QueuedSubmissionEntity.STATUS_PENDING || it.status == QueuedSubmissionEntity.STATUS_FAILED }
     }
 
     // ── Profile & Auth ──
@@ -1101,8 +1223,6 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
     }
 
     // ── Phase 4: Store Ecosystem & Discrepancies ──
-    override fun getNearbyStores(): Flow<List<Store>> = nearbyStores.asStateFlow()
-
     override fun getStoreById(storeId: String): Flow<Store?> {
         return nearbyStores.map { list -> list.find { it.id == storeId } }
     }
@@ -1185,6 +1305,22 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
             addedCount++
         }
         return addedCount
+    }
+
+    // ── Notifications & Alerts ──
+    override fun getNotifications(): Flow<List<AppNotification>> = notifications.asStateFlow()
+
+    override suspend fun markNotificationAsRead(notificationId: String) {
+        val current = notifications.value.toMutableList()
+        val index = current.indexOfFirst { it.id == notificationId }
+        if (index != -1) {
+            current[index] = current[index].copy(isRead = true)
+            notifications.value = current
+        }
+    }
+
+    override suspend fun markAllNotificationsAsRead() {
+        notifications.value = notifications.value.map { it.copy(isRead = true) }
     }
 
     // ── Settings ──

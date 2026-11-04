@@ -1,16 +1,119 @@
-*.iml
-.gradle
-.kotlin
-/local.properties
-.idea/
-*.iws
-*.iml
+# ==============================================================================
+# Price Bridge — Comprehensive Git Ignore Policy
+# Covers: Android (Kotlin/Compose), Go Backend, Python AI Worker, Secrets & IDEs
+# ==============================================================================
 
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+# ── 1. Secrets, Credentials & Environment Files (CRITICAL) ──
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+*.crt
+my-upload-key.jks
 debug.keystore
+*.jks
+*.keystore
+google-services.json
+*service-account*.json
+firebase-adminsdk*.json
+
+# Never ignore environment template
+!.env.example
+
+# ── 2. Android & Gradle Build Artifacts ──
+.gradle/
+.kotlin/
+build/
+*/build/
+app/build/
+local.properties
+/captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+output.json
+
+# ── 3. Go Backend Artifacts ──
+backend/server
+backend/server.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+vendor/
+
+# ── 4. Python AI Worker (Virtual Environments & Cache) ──
+ai_worker/.venv/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+__pycache__/
+*/__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+.Python
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── 5. Database, Local Storage & Cache Volumes ──
+pgdata/
+redisdata/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ── 6. IDEs & Editors ──
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ── 7. Operating System Artifacts ──
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# ── 8. Logs & Temporary Scripts ──
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+scripts/__pycache__/

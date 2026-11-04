@@ -917,7 +917,7 @@ private fun CapturedPriceFormView(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Evidence is reviewed by community moderators. You earn +20 Karma Points for submitting photo evidence.",
+                        text = "Evidence is reviewed by community moderators. You earn +20 Points for submitting photo evidence.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

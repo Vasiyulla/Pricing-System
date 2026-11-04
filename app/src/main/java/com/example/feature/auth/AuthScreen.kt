@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,8 +25,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -201,10 +205,13 @@ fun AuthContent(
                 AuthStep.PHONE_INPUT -> {
                     PhoneInputStep(
                         phoneNumber = uiState.phoneNumber,
+                        selectedCountry = uiState.selectedCountry,
+                        isPhoneValid = uiState.isPhoneValid,
                         isConsentChecked = uiState.isConsentChecked,
                         isLoading = uiState.isLoading,
                         onPhoneChanged = { onEvent(AuthUiEvent.OnPhoneNumberChanged(it)) },
                         onUseDemo = { onEvent(AuthUiEvent.OnUseDemoPhone("9876543210")) },
+                        onOpenCountryPicker = { onEvent(AuthUiEvent.OnOpenCountryPicker) },
                         onToggleConsent = { onEvent(AuthUiEvent.OnToggleConsent(it)) },
                         onOpenConsentSheet = { onEvent(AuthUiEvent.OnOpenConsentSheet) },
                         onSubmit = { onEvent(AuthUiEvent.OnRequestOtp) },
@@ -243,15 +250,30 @@ fun AuthContent(
             }
         )
     }
+
+    // Multi-Region Country Code Picker Modal Bottom Sheet
+    if (uiState.isCountryPickerOpen) {
+        CountryPickerBottomSheet(
+            countries = uiState.filteredCountries,
+            selectedCountry = uiState.selectedCountry,
+            searchQuery = uiState.countrySearchQuery,
+            onSearchQueryChange = { onEvent(AuthUiEvent.OnCountrySearchQueryChanged(it)) },
+            onSelectCountry = { onEvent(AuthUiEvent.OnSelectCountry(it)) },
+            onDismiss = { onEvent(AuthUiEvent.OnDismissCountryPicker) }
+        )
+    }
 }
 
 @Composable
 private fun PhoneInputStep(
     phoneNumber: String,
+    selectedCountry: CountryCode,
+    isPhoneValid: Boolean,
     isConsentChecked: Boolean,
     isLoading: Boolean,
     onPhoneChanged: (String) -> Unit,
     onUseDemo: () -> Unit,
+    onOpenCountryPicker: () -> Unit,
     onToggleConsent: (Boolean) -> Unit,
     onOpenConsentSheet: () -> Unit,
     onSubmit: () -> Unit,
@@ -272,19 +294,31 @@ private fun PhoneInputStep(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Country Code Pill
+            // Country Code Selector Pill
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                modifier = Modifier.height(56.dp)
+                modifier = Modifier
+                    .height(56.dp)
+                    .clickable { onOpenCountryPicker() }
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 14.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                ) {
                     Text(
-                        text = "+91 🇮🇳",
+                        text = "${selectedCountry.flagEmoji} ${selectedCountry.code}",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Select country code",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -295,7 +329,7 @@ private fun PhoneInputStep(
             OutlinedTextField(
                 value = phoneNumber,
                 onValueChange = onPhoneChanged,
-                placeholder = { Text(stringResource(R.string.auth_phone_placeholder)) },
+                placeholder = { Text(selectedCountry.placeholder) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 shape = RoundedCornerShape(12.dp),
@@ -341,7 +375,7 @@ private fun PhoneInputStep(
 
             Column {
                 Text(
-                    text = "I agree to on-demand location access and crowdsourced price sharing under India's DPDP Act 2023.",
+                    text = "I agree to on-demand location access and crowdsourced price sharing under applicable data protection privacy regulations.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -362,7 +396,7 @@ private fun PhoneInputStep(
         // Get OTP Button
         Button(
             onClick = onSubmit,
-            enabled = phoneNumber.length == 10 && !isLoading,
+            enabled = isPhoneValid && !isLoading,
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
@@ -714,3 +748,120 @@ private fun DpdpPillarItem(
         }
     }
 }
+
+/**
+ * Modal bottom sheet for choosing international dial codes across regions.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CountryPickerBottomSheet(
+    countries: List<CountryCode>,
+    selectedCountry: CountryCode,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onSelectCountry: (CountryCode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                text = "Select Country / Region",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                placeholder = { Text("Search country name or code...") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(countries, key = { "${it.countryName}_${it.code}" }) { country ->
+                    val isSelected = country.code == selectedCountry.code && country.countryName == selectedCountry.countryName
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectCountry(country) }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = country.flagEmoji,
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = country.countryName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = country.code,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (isSelected) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

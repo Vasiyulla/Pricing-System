@@ -55,7 +55,8 @@ fun PriceBridgeTopAppBar(
     onNotificationsClick: () -> Unit,
     onSearchClick: () -> Unit,
     onBarcodeScanClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    unreadNotificationsCount: Int = 0
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -203,13 +204,15 @@ fun PriceBridgeTopAppBar(
                         }
                     }
                     // Unread badge dot
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 8.dp, end = 8.dp)
-                            .size(8.dp)
-                            .background(MaterialTheme.colorScheme.error, CircleShape)
-                            .border(1.5.dp, MaterialTheme.colorScheme.surfaceContainer, CircleShape)
-                    )
+                    if (unreadNotificationsCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 8.dp, end = 8.dp)
+                                .size(8.dp)
+                                .background(MaterialTheme.colorScheme.error, CircleShape)
+                                .border(1.5.dp, MaterialTheme.colorScheme.surfaceContainer, CircleShape)
+                        )
+                    }
                 }
             }
 

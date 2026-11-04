@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # ── Go Transactional Core & API Gateway ──
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pricebridge-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=postgres://pricebridge:secretpass@postgres:5432/pricebridge?sslmode=disable
+      - REDIS_URL=redis://redis:6379/0
+      - AI_WORKER_URL=http://ai-worker:8000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── Python AI & Multimodal Worker (FastAPI) ──
+  ai-worker:
+    build:
+      context: ./ai_worker
+      dockerfile: Dockerfile
+    container_name: pricebridge-ai-worker
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    restart: unless-stopped
+
+  # ── PostgreSQL 16 + PostGIS ──
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: pricebridge-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=pricebridge
+      - POSTGRES_PASSWORD=secretpass
+      - POSTGRES_DB=pricebridge
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pricebridge"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis 7 Cluster / Standalone (Geohash Cache) ──
+  redis:
+    image: redis:7-alpine
+    container_name: pricebridge-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+

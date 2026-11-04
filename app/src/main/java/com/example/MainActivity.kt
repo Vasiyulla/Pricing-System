@@ -15,6 +15,8 @@ import androidx.navigation.navArgument
 import com.example.feature.addproduct.AddProductScreen
 import com.example.feature.auth.AuthScreen
 import com.example.feature.basket.BasketScreen
+import com.example.feature.basket.TwoStopBasketScreen
+import com.example.feature.bounty.BountyRadarScreen
 import com.example.feature.home.HomeScreen
 import com.example.feature.productdetail.ProductDetailScreen
 import com.example.feature.profile.ProfileScreen
@@ -22,6 +24,8 @@ import com.example.feature.scan.ScanScreen
 import com.example.feature.search.SearchScreen
 import com.example.feature.store.StoreDetailScreen
 import com.example.feature.submit.SubmitPriceScreen
+import com.example.feature.trolley.TrolleyEarScreen
+import com.example.feature.yellowsticker.YellowStickerScreen
 import com.example.ui.theme.PriceBridgeTheme
 
 /**
@@ -38,6 +42,10 @@ object Routes {
     const val STORE_DETAIL = "store/{storeId}"
     const val SUBMIT_PRICE = "submit_price?productId={productId}"
     const val ADD_PRODUCT = "add_product?barcode={barcode}"
+    const val TROLLEY_EAR = "trolley_ear"
+    const val TWO_STOP_BASKET = "two_stop_basket"
+    const val YELLOW_STICKERS = "yellow_stickers"
+    const val BOUNTIES = "bounties"
 
     fun productDetail(productId: String) = "product/$productId"
     fun storeDetail(storeId: String) = "store/$storeId"
@@ -100,6 +108,21 @@ fun PriceBridgeNavHost(
                     navController.navigate(Routes.PROFILE) {
                         launchSingleTop = true
                     }
+                },
+                onNavigateToStore = { storeId ->
+                    navController.navigate(Routes.storeDetail(storeId))
+                },
+                onNavigateToTrolleyEar = {
+                    navController.navigate(Routes.TROLLEY_EAR)
+                },
+                onNavigateToTwoStopBasket = {
+                    navController.navigate(Routes.TWO_STOP_BASKET)
+                },
+                onNavigateToYellowStickers = {
+                    navController.navigate(Routes.YELLOW_STICKERS)
+                },
+                onNavigateToBounties = {
+                    navController.navigate(Routes.BOUNTIES)
                 }
             )
         }
@@ -241,6 +264,18 @@ fun PriceBridgeNavHost(
                 },
                 onNavigateToStore = { storeId ->
                     navController.navigate(Routes.storeDetail(storeId))
+                },
+                onNavigateToTrolleyEar = {
+                    navController.navigate(Routes.TROLLEY_EAR)
+                },
+                onNavigateToTwoStopBasket = {
+                    navController.navigate(Routes.TWO_STOP_BASKET)
+                },
+                onNavigateToYellowStickers = {
+                    navController.navigate(Routes.YELLOW_STICKERS)
+                },
+                onNavigateToBounties = {
+                    navController.navigate(Routes.BOUNTIES)
                 }
             )
         }
@@ -312,6 +347,26 @@ fun PriceBridgeNavHost(
                 onAuthSuccess = { navController.popBackStack() },
                 onNavigateBack = { navController.popBackStack() }
             )
+        }
+
+        // ── The Trolley Ear (Audio Whisperer) ──
+        composable(Routes.TROLLEY_EAR) {
+            TrolleyEarScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        // ── 2-Stop Pareto Basket Optimizer ──
+        composable(Routes.TWO_STOP_BASKET) {
+            TwoStopBasketScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        // ── Yellow Sticker Clearance Radar ──
+        composable(Routes.YELLOW_STICKERS) {
+            YellowStickerScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        // ── AI Bounty Hunter ──
+        composable(Routes.BOUNTIES) {
+            BountyRadarScreen(onNavigateBack = { navController.popBackStack() })
         }
     }
 }

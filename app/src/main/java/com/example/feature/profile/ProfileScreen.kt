@@ -74,6 +74,7 @@ import com.example.core.ui.LoadingStateView
 import com.example.core.ui.PriceBridgeBottomBar
 import com.example.core.ui.PriceStatusBadgeComponent
 import com.example.core.ui.TrustBadgeFooter
+import com.example.feature.offline.OfflineQueueBottomSheet
 import com.example.ui.theme.spacing
 
 /**
@@ -176,6 +177,7 @@ fun ProfileContent(
                             profile = uiState.profile,
                             pendingOfflineCount = uiState.pendingOfflineCount,
                             onSyncOfflineQueue = { onEvent(ProfileUiEvent.OnSyncOfflineQueue) },
+                            onInspectOfflineQueue = { onEvent(ProfileUiEvent.OnOpenOfflineQueueSheet) },
                             onSwitchProfile = { onEvent(ProfileUiEvent.OnOpenProfileSwitcher) },
                             onOpenDpdpNotice = { onEvent(ProfileUiEvent.OnOpenDpdpNotice) },
                             onAuthAction = {
@@ -227,6 +229,40 @@ fun ProfileContent(
                 if (uiState.isDpdpNoticeOpen) {
                     ProfileDpdpBottomSheet(
                         onDismiss = { onEvent(ProfileUiEvent.OnDismissDpdpNotice) }
+                    )
+                }
+
+                // Offline Queue Inspection Bottom Sheet
+                if (uiState.isOfflineQueueSheetOpen) {
+                    OfflineQueueBottomSheet(
+                        queuedSubmissions = uiState.queuedSubmissions,
+                        isSyncing = uiState.isSyncingOffline,
+                        onSyncAll = { onEvent(ProfileUiEvent.OnSyncOfflineQueue) },
+                        onRetrySubmission = { id -> onEvent(ProfileUiEvent.OnRetryQueuedSubmission(id)) },
+                        onCancelSubmission = { id -> onEvent(ProfileUiEvent.OnCancelQueuedSubmission(id)) },
+                        onDismiss = { onEvent(ProfileUiEvent.OnDismissOfflineQueueSheet) }
+                    )
+                }
+
+                // Settings & Preferences Bottom Sheet
+                if (uiState.isSettingsSheetOpen) {
+                    SettingsBottomSheet(
+                        notifyPriceDrops = uiState.notifyPriceDrops,
+                        notifyFreshnessAlerts = uiState.notifyFreshnessAlerts,
+                        notifyCommunityPoints = uiState.notifyCommunityPoints,
+                        autoSyncOnWifi = uiState.autoSyncOnWifi,
+                        compressReceiptImages = uiState.compressReceiptImages,
+                        preferredRadiusKm = uiState.preferredRadiusKm,
+                        isCacheClearedMessageVisible = uiState.isCacheClearedMessageVisible,
+                        onTogglePriceDropNotifs = { onEvent(ProfileUiEvent.OnTogglePriceDropNotifs(it)) },
+                        onToggleFreshnessNotifs = { onEvent(ProfileUiEvent.OnToggleFreshnessNotifs(it)) },
+                        onTogglePointsNotifs = { onEvent(ProfileUiEvent.OnTogglePointsNotifs(it)) },
+                        onToggleAutoSyncWifi = { onEvent(ProfileUiEvent.OnToggleAutoSyncWifi(it)) },
+                        onToggleCompressImages = { onEvent(ProfileUiEvent.OnToggleCompressImages(it)) },
+                        onSelectPreferredRadius = { onEvent(ProfileUiEvent.OnSelectPreferredRadius(it)) },
+                        onClearLocalCache = { onEvent(ProfileUiEvent.OnClearLocalCache) },
+                        onOpenDpdpNotice = { onEvent(ProfileUiEvent.OnOpenDpdpNotice) },
+                        onDismiss = { onEvent(ProfileUiEvent.OnDismissSettingsSheet) }
                     )
                 }
             }
@@ -555,6 +591,7 @@ private fun ProfileActionsCard(
     profile: UserProfile,
     pendingOfflineCount: Int,
     onSyncOfflineQueue: () -> Unit,
+    onInspectOfflineQueue: () -> Unit,
     onSwitchProfile: () -> Unit,
     onOpenDpdpNotice: () -> Unit,
     onAuthAction: () -> Unit,
@@ -577,10 +614,11 @@ private fun ProfileActionsCard(
             // Offline submission queue resilience tile (Plan Sprint 6)
             if (pendingOfflineCount > 0) {
                 Surface(
+                    onClick = onInspectOfflineQueue,
                     shape = RoundedCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().testTag("profile_offline_sync_card")
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
@@ -601,15 +639,25 @@ private fun ProfileActionsCard(
                                 color = MaterialTheme.colorScheme.onTertiaryContainer
                             )
                             Text(
-                                text = "Stored locally in Room database",
+                                text = "Stored in Room • Tap to inspect",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
                             )
                         }
+                        OutlinedButton(
+                            onClick = onInspectOfflineQueue,
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text("Inspect", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
                         Button(
                             onClick = onSyncOfflineQueue,
                             shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
                         ) {
                             Text("Sync", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
@@ -853,7 +901,7 @@ private fun ProfileSwitcherBottomSheet(
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "${profile.role.name} • ${profile.reputationLevel} • ${profile.karmaPoints} Karma",
+                                    text = "${profile.role.name} • ${profile.reputationLevel} • ${profile.karmaPoints} Points",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

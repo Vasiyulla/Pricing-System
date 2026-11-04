@@ -1,5 +1,6 @@
 package com.example.core.data
 
+import com.example.core.data.local.entity.QueuedSubmissionEntity
 import com.example.core.model.Category
 import com.example.core.model.GoogleTaskItem
 import com.example.core.model.GoogleTaskList
@@ -64,6 +65,7 @@ interface PriceBridgeRepository {
         sourceType: String
     )
     fun getPendingOfflineSubmissionCount(): Flow<Int>
+    fun getQueuedSubmissions(): Flow<List<QueuedSubmissionEntity>>
     suspend fun enqueueOfflinePrice(
         productId: String,
         storeId: String,
@@ -72,6 +74,8 @@ interface PriceBridgeRepository {
         sourceType: String
     ): String
     suspend fun syncOfflineSubmissions(): Int
+    suspend fun retryQueuedSubmission(submissionId: String): Boolean
+    suspend fun cancelQueuedSubmission(submissionId: String)
 
     // ── Profile & Auth ──
     fun getUserProfile(): Flow<UserProfile>
@@ -85,7 +89,6 @@ interface PriceBridgeRepository {
     suspend fun switchProfile(profileId: String)
 
     // ── Phase 4: Store Ecosystem & Discrepancies ──
-    fun getNearbyStores(): Flow<List<Store>>
     fun getStoreById(storeId: String): Flow<Store?>
     fun getStorePrices(storeId: String): Flow<List<StorePrice>>
     suspend fun requestPreVisitPriceCheck(storeId: String, productId: String? = null): Boolean
@@ -99,8 +102,14 @@ interface PriceBridgeRepository {
     fun getGoogleTasksForList(listId: String): Flow<List<GoogleTaskItem>>
     suspend fun importGoogleTasks(selectedTasks: List<GoogleTaskItem>): Int
 
+    // ── Notifications & Alerts ──
+    fun getNotifications(): Flow<List<com.example.core.model.AppNotification>>
+    suspend fun markNotificationAsRead(notificationId: String)
+    suspend fun markAllNotificationsAsRead()
+
     // ── Settings ──
     suspend fun updateLocation(neighborhood: String, radiusKm: Double)
     suspend fun dismissKarmaPrompt(promptId: String)
 }
+
 

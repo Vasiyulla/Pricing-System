@@ -932,7 +932,7 @@ private fun DiscrepancyBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Earn +10 Karma points for keeping local prices accurate.",
+                        text = "Earn +10 points for keeping local prices accurate.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         fontWeight = FontWeight.Medium
@@ -1019,7 +1019,7 @@ private fun DiscrepancyBottomSheet(
                     .height(50.dp)
             ) {
                 Text(
-                    text = "Submit Report (+10 Karma)",
+                    text = "Submit Report (+10 Points)",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )

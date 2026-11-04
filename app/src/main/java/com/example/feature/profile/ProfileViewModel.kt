@@ -51,7 +51,56 @@ class ProfileViewModel(
             }
             is ProfileUiEvent.OnSyncOfflineQueue -> {
                 viewModelScope.launch {
+                    _uiState.update { it.copy(isSyncingOffline = true) }
                     repository.syncOfflineSubmissions()
+                    _uiState.update { it.copy(isSyncingOffline = false, isOfflineQueueSheetOpen = false) }
+                }
+            }
+            is ProfileUiEvent.OnOpenOfflineQueueSheet -> {
+                _uiState.update { it.copy(isOfflineQueueSheetOpen = true) }
+            }
+            is ProfileUiEvent.OnDismissOfflineQueueSheet -> {
+                _uiState.update { it.copy(isOfflineQueueSheetOpen = false) }
+            }
+            is ProfileUiEvent.OnSettingsClicked -> {
+                _uiState.update { it.copy(isSettingsSheetOpen = true) }
+            }
+            is ProfileUiEvent.OnDismissSettingsSheet -> {
+                _uiState.update { it.copy(isSettingsSheetOpen = false) }
+            }
+            is ProfileUiEvent.OnTogglePriceDropNotifs -> {
+                _uiState.update { it.copy(notifyPriceDrops = event.enabled) }
+            }
+            is ProfileUiEvent.OnToggleFreshnessNotifs -> {
+                _uiState.update { it.copy(notifyFreshnessAlerts = event.enabled) }
+            }
+            is ProfileUiEvent.OnTogglePointsNotifs -> {
+                _uiState.update { it.copy(notifyCommunityPoints = event.enabled) }
+            }
+            is ProfileUiEvent.OnToggleAutoSyncWifi -> {
+                _uiState.update { it.copy(autoSyncOnWifi = event.enabled) }
+            }
+            is ProfileUiEvent.OnToggleCompressImages -> {
+                _uiState.update { it.copy(compressReceiptImages = event.enabled) }
+            }
+            is ProfileUiEvent.OnSelectPreferredRadius -> {
+                _uiState.update { it.copy(preferredRadiusKm = event.radiusKm) }
+            }
+            is ProfileUiEvent.OnClearLocalCache -> {
+                viewModelScope.launch {
+                    _uiState.update { it.copy(isCacheClearedMessageVisible = true) }
+                    kotlinx.coroutines.delay(2000)
+                    _uiState.update { it.copy(isCacheClearedMessageVisible = false) }
+                }
+            }
+            is ProfileUiEvent.OnRetryQueuedSubmission -> {
+                viewModelScope.launch {
+                    repository.retryQueuedSubmission(event.submissionId)
+                }
+            }
+            is ProfileUiEvent.OnCancelQueuedSubmission -> {
+                viewModelScope.launch {
+                    repository.cancelQueuedSubmission(event.submissionId)
                 }
             }
             else -> { /* Navigation events handled by screen callbacks */ }
@@ -61,10 +110,15 @@ class ProfileViewModel(
     private fun loadProfile() {
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-        // Observe offline queue count
+        // Observe offline queue count & queued items
         viewModelScope.launch {
             repository.getPendingOfflineSubmissionCount().collect { count ->
                 _uiState.update { it.copy(pendingOfflineCount = count) }
+            }
+        }
+        viewModelScope.launch {
+            repository.getQueuedSubmissions().collect { queued ->
+                _uiState.update { it.copy(queuedSubmissions = queued) }
             }
         }
 

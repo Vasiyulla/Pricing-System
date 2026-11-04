@@ -1,0 +1,165 @@
+openapi: 3.0.3
+info:
+  title: Price Bridge UK API
+  description: High-throughput crowdsourced price comparison and retail intelligence engine for UK supermarkets.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local Go Backend
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: API is operational
+  /api/v1/stores/nearby:
+    get:
+      summary: Get nearby stores
+      parameters:
+        - name: lat
+          in: query
+          schema:
+            type: number
+        - name: lon
+          in: query
+          schema:
+            type: number
+        - name: radius_km
+          in: query
+          schema:
+            type: number
+      responses:
+        '200':
+          description: List of stores
+  /api/v1/products/search:
+    get:
+      summary: Search products
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of products
+  /api/v1/products/barcode/{ean}:
+    get:
+      summary: Get product by EAN barcode
+      parameters:
+        - name: ean
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product
+  /api/v1/products/{id}/compare:
+    get:
+      summary: Compare prices across stores with dual loyalty pricing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: lat
+          in: query
+          schema:
+            type: number
+        - name: lon
+          in: query
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Ranked comparisons
+  /api/v1/products/{id}/trolley-whisper:
+    get:
+      summary: Trolley Ear audio advice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: store_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Whisper advice text
+  /api/v1/prices/submit:
+    post:
+      summary: Submit price to append-only ledger
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, store_id, regular_price_pence, source_type]
+              properties:
+                product_id:
+                  type: string
+                store_id:
+                  type: string
+                regular_price_pence:
+                  type: integer
+                loyalty_price_pence:
+                  type: integer
+                loyalty_scheme:
+                  type: string
+                source_type:
+                  type: string
+      responses:
+        '201':
+          description: Submitted
+  /api/v1/basket/optimize:
+    post:
+      summary: 2-Stop Pareto basket optimizer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                user_lat:
+                  type: number
+                user_lon:
+                  type: number
+      responses:
+        '200':
+          description: Optimized 2-stop breakdown
+  /api/v1/bounties/nearby:
+    get:
+      summary: Active price-gap bounties
+      responses:
+        '200':
+          description: List of bounties
+  /api/v1/ai/receipt-scan:
+    post:
+      summary: Multimodal receipt OCR extraction
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                image_base64:
+                  type: string
+      responses:
+        '200':
+          description: Extracted receipt line items
+

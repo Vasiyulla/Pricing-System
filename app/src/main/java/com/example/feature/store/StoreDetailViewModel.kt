@@ -1,10 +1,9 @@
 package com.example.feature.store
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.core.data.FakePriceBridgeRepository
 import com.example.core.data.PriceBridgeRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,15 +11,11 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-@HiltViewModel
-class StoreDetailViewModel @Inject constructor(
-    private val repository: PriceBridgeRepository,
-    savedStateHandle: SavedStateHandle
+class StoreDetailViewModel(
+    private val storeId: String,
+    private val repository: PriceBridgeRepository = FakePriceBridgeRepository()
 ) : ViewModel() {
-
-    private val storeId: String = checkNotNull(savedStateHandle["storeId"])
 
     private val _uiState = MutableStateFlow(StoreDetailUiState(isLoading = true))
     val uiState: StateFlow<StoreDetailUiState> = _uiState.asStateFlow()

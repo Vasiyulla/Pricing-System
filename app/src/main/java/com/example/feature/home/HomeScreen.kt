@@ -1,8 +1,8 @@
 package com.example.feature.home
 
 import android.content.res.Configuration
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,23 +17,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -47,20 +54,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
+import com.example.core.model.AppNotification
 import com.example.core.model.Category
 import com.example.core.model.KarmaVerificationPrompt
 import com.example.core.model.LocationInfo
 import com.example.core.model.PriceStatusBadgeType
 import com.example.core.model.Product
 import com.example.core.model.SmartBasketSummary
+import com.example.core.model.Store
 import com.example.core.model.StorePrice
 import com.example.core.ui.BottomBarDestination
 import com.example.core.ui.CategoryPillStrip
@@ -74,6 +86,8 @@ import com.example.core.ui.PriceBridgeBottomBar
 import com.example.core.ui.PriceBridgeTopAppBar
 import com.example.core.ui.ProductDealCard
 import com.example.core.ui.TrustBadgeFooter
+import com.example.feature.notifications.NotificationsBottomSheet
+import com.example.feature.offline.OfflineQueueBottomSheet
 import com.example.ui.theme.PriceBridgeTheme
 import com.example.ui.theme.spacing
 
@@ -88,6 +102,7 @@ fun HomeScreen(
     onNavigateToBasket: () -> Unit,
     onNavigateToSaved: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToStore: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel()
 ) {
@@ -101,6 +116,7 @@ fun HomeScreen(
                 is HomeUiEvent.OnScanClicked -> onNavigateToScan()
                 is HomeUiEvent.OnProductClicked -> onNavigateToProductDetail(event.productId)
                 is HomeUiEvent.OnCompareStoresClicked -> onNavigateToProductDetail(event.productId)
+                is HomeUiEvent.OnStoreClicked -> onNavigateToStore(event.storeId)
                 is HomeUiEvent.OnViewBasketClicked -> onNavigateToBasket()
                 is HomeUiEvent.OnBottomNavClicked -> {
                     when (event.destination) {
@@ -118,6 +134,8 @@ fun HomeScreen(
                 else -> viewModel.onEvent(event)
             }
         },
+        onNavigateToProduct = onNavigateToProductDetail,
+        onNavigateToStore = onNavigateToStore,
         modifier = modifier
     )
 }
@@ -130,6 +148,8 @@ fun HomeScreen(
 fun HomeContent(
     uiState: HomeUiState,
     onEvent: (HomeUiEvent) -> Unit,
+    onNavigateToProduct: (String) -> Unit = {},
+    onNavigateToStore: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -139,7 +159,8 @@ fun HomeContent(
                 onLocationClick = { onEvent(HomeUiEvent.OnLocationSelectorClicked) },
                 onNotificationsClick = { onEvent(HomeUiEvent.OnNotificationsClicked) },
                 onSearchClick = { onEvent(HomeUiEvent.OnSearchClicked) },
-                onBarcodeScanClick = { onEvent(HomeUiEvent.OnScanClicked) }
+                onBarcodeScanClick = { onEvent(HomeUiEvent.OnScanClicked) },
+                unreadNotificationsCount = uiState.unreadNotificationsCount
             )
         },
         bottomBar = {
@@ -196,10 +217,11 @@ fun HomeContent(
                             item(key = "offline_sync_banner") {
                                 Box(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
                                     Surface(
+                                        onClick = { onEvent(HomeUiEvent.OnOpenOfflineQueueSheet) },
                                         shape = RoundedCornerShape(14.dp),
                                         color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
                                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)),
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier.fillMaxWidth().testTag("banner_offline_sync")
                                     ) {
                                         Row(
                                             modifier = Modifier.padding(14.dp),
@@ -227,18 +249,30 @@ fun HomeContent(
                                                     color = MaterialTheme.colorScheme.onTertiaryContainer
                                                 )
                                                 Text(
-                                                    text = "Saved in Room • Safe to sync anytime",
+                                                    text = "Tap to inspect • Safe to sync anytime",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
                                                 )
                                             }
+                                            OutlinedButton(
+                                                onClick = { onEvent(HomeUiEvent.OnOpenOfflineQueueSheet) },
+                                                shape = RoundedCornerShape(10.dp),
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Inspect",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(6.dp))
                                             Button(
                                                 onClick = { onEvent(HomeUiEvent.OnSyncOfflineQueue) },
                                                 shape = RoundedCornerShape(10.dp),
                                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                                             ) {
                                                 Text(
-                                                    text = "Sync Now",
+                                                    text = "Sync",
                                                     style = MaterialTheme.typography.labelSmall,
                                                     fontWeight = FontWeight.Bold
                                                 )
@@ -261,6 +295,90 @@ fun HomeContent(
                             }
                         }
 
+                        // ── AI Superpowers Quick Access Strip ──
+                        item(key = "ai_superpowers_strip") {
+                            Column(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
+                                Text(
+                                    text = "AI Smart Tools",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    item {
+                                        Surface(
+                                            onClick = onNavigateToTrolleyEar,
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0xFFE8F5E9),
+                                            border = BorderStroke(1.dp, Color(0xFF81C784))
+                                        ) {
+                                            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Headphones, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
+                                                Spacer(Modifier.width(8.dp))
+                                                Column {
+                                                    Text("Trolley Ear", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF1B5E20))
+                                                    Text("In-Store Audio", fontSize = 11.sp, color = Color(0xFF2E7D32))
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item {
+                                        Surface(
+                                            onClick = onNavigateToTwoStopBasket,
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0xFFE3F2FD),
+                                            border = BorderStroke(1.dp, Color(0xFF90CAF9))
+                                        ) {
+                                            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Savings, contentDescription = null, tint = Color(0xFF1565C0), modifier = Modifier.size(20.dp))
+                                                Spacer(Modifier.width(8.dp))
+                                                Column {
+                                                    Text("2-Stop Split", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0D47A1))
+                                                    Text("Pareto Basket", fontSize = 11.sp, color = Color(0xFF1565C0))
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item {
+                                        Surface(
+                                            onClick = onNavigateToYellowStickers,
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0xFFFFF9C4),
+                                            border = BorderStroke(1.dp, Color(0xFFFFF176))
+                                        ) {
+                                            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.LocalOffer, contentDescription = null, tint = Color(0xFFE65100), modifier = Modifier.size(20.dp))
+                                                Spacer(Modifier.width(8.dp))
+                                                Column {
+                                                    Text("Yellow Stickers", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFBF360C))
+                                                    Text("Clearance Deals", fontSize = 11.sp, color = Color(0xFFE65100))
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item {
+                                        Surface(
+                                            onClick = onNavigateToBounties,
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0xFFF3E5F5),
+                                            border = BorderStroke(1.dp, Color(0xFFCE93D8))
+                                        ) {
+                                            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.MilitaryTech, contentDescription = null, tint = Color(0xFF6A1B9A), modifier = Modifier.size(20.dp))
+                                                Spacer(Modifier.width(8.dp))
+                                                Column {
+                                                    Text("AI Bounties", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF4A148C))
+                                                    Text("Earn Points", fontSize = 11.sp, color = Color(0xFF6A1B9A))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Categories Horizontal Filter Strip
                         if (uiState.categories.isNotEmpty()) {
                             item(key = "categories_strip") {
@@ -271,6 +389,61 @@ fun HomeContent(
                                         onEvent(HomeUiEvent.OnCategorySelected(categoryId))
                                     }
                                 )
+                            }
+                        }
+
+                        // Nearby Stores & Kiranas Horizontal Discovery Carousel
+                        if (uiState.nearbyStores.isNotEmpty()) {
+                            item(key = "nearby_stores_header") {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = MaterialTheme.spacing.spaceMd),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "Nearby Stores & Kiranas",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .background(
+                                                        MaterialTheme.colorScheme.primary,
+                                                        CircleShape
+                                                    )
+                                            )
+                                        }
+                                        Text(
+                                            text = "Verified local shops • Reliability scores",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
+                            item(key = "nearby_stores_carousel") {
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = MaterialTheme.spacing.spaceMd),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    items(
+                                        items = uiState.nearbyStores,
+                                        key = { it.id }
+                                    ) { store ->
+                                        NearbyStoreCard(
+                                            store = store,
+                                            onClick = { onEvent(HomeUiEvent.OnStoreClicked(store.id)) }
+                                        )
+                                    }
+                                }
                             }
                         }
 
@@ -386,6 +559,36 @@ fun HomeContent(
                 }
             )
         }
+    }
+
+    // In-App Notifications & Alerts Bottom Sheet
+    if (uiState.isNotificationsSheetOpen) {
+        NotificationsBottomSheet(
+            notifications = uiState.notifications,
+            onNotificationClick = { notification ->
+                onEvent(HomeUiEvent.OnNotificationClicked(notification))
+                onEvent(HomeUiEvent.OnDismissNotificationsSheet)
+                if (notification.targetProductId != null) {
+                    onNavigateToProduct(notification.targetProductId)
+                } else if (notification.targetStoreId != null) {
+                    onNavigateToStore(notification.targetStoreId)
+                }
+            },
+            onMarkAllRead = { onEvent(HomeUiEvent.OnMarkAllNotificationsRead) },
+            onDismiss = { onEvent(HomeUiEvent.OnDismissNotificationsSheet) }
+        )
+    }
+
+    // Offline Queue Inspection Bottom Sheet
+    if (uiState.isOfflineQueueSheetOpen) {
+        OfflineQueueBottomSheet(
+            queuedSubmissions = uiState.queuedSubmissions,
+            isSyncing = uiState.isSyncingOffline,
+            onSyncAll = { onEvent(HomeUiEvent.OnSyncOfflineQueue) },
+            onRetrySubmission = { id -> onEvent(HomeUiEvent.OnRetryQueuedSubmission(id)) },
+            onCancelSubmission = { id -> onEvent(HomeUiEvent.OnCancelQueuedSubmission(id)) },
+            onDismiss = { onEvent(HomeUiEvent.OnDismissOfflineQueueSheet) }
+        )
     }
 }
 
@@ -583,6 +786,147 @@ private fun LocationSelectionSheetContent(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
+        }
+    }
+}
+
+/**
+ * Beautiful local store discovery card with reliability score, distance, and verified price badge.
+ */
+@Composable
+fun NearbyStoreCard(
+    store: Store,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier
+            .width(220.dp)
+            .testTag("nearby_store_card_${store.id}")
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (store.isStoreConfirmedPartner)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Storefront,
+                        contentDescription = null,
+                        tint = if (store.isStoreConfirmedPartner)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                // Reliability pill
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (store.reliabilityScore >= 90) Color(0xFF10B981).copy(alpha = 0.15f)
+                    else MaterialTheme.colorScheme.secondaryContainer,
+                    border = BorderStroke(
+                        0.5.dp,
+                        if (store.reliabilityScore >= 90) Color(0xFF10B981)
+                        else MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = null,
+                            tint = if (store.reliabilityScore >= 90) Color(0xFF10B981)
+                            else MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = "${store.reliabilityScore}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (store.reliabilityScore >= 90) Color(0xFF10B981)
+                            else MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = store.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = store.address,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Distance tag
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = store.distanceFormatted,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                // Observations count
+                Text(
+                    text = "${store.verifiedPricesCount} verified",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
         }
     }
 }

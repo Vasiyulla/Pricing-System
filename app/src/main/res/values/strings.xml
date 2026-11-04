@@ -43,9 +43,9 @@
     <string name="mrp_format">₹%1$.2f</string>
     <string name="meta_dot">·</string>
 
-    <!-- Karma Section -->
+    <!-- Community Verification Section -->
     <string name="karma_section_title">Help Verify Nearby Prices</string>
-    <string name="karma_points_tag">Earn +%1$d Karma</string>
+    <string name="karma_points_tag">Earn +%1$d Points</string>
     <string name="btn_verify_price">Verify Price</string>
     <string name="btn_maybe_later">Maybe Later</string>
 
@@ -77,7 +77,7 @@
     <string name="capture_evidence_item">Product Label</string>
     <string name="capture_submit_btn">Submit Price &amp; Photo</string>
     <string name="capture_success_title">Photo &amp; Price Submitted!</string>
-    <string name="capture_success_desc">Thank you! Your evidence has been recorded. +20 Karma points earned.</string>
+    <string name="capture_success_desc">Thank you! Your evidence has been recorded. +20 Points earned.</string>
     <string name="capture_btn_another">Capture Another</string>
     <string name="capture_mode_photo">Camera Photo</string>
     <string name="capture_mode_barcode">Barcode Scan</string>
@@ -139,13 +139,13 @@
     <string name="btn_submit_price">Submit Price</string>
     <string name="submit_disclaimer">Community prices are never presented as guaranteed. Your submission helps neighbours compare honestly.</string>
     <string name="submit_success_title">Price Submitted!</string>
-    <string name="submit_success_description">Thank you for contributing! Your report helps your community find better deals. +20 Karma earned.</string>
+    <string name="submit_success_description">Thank you for contributing! Your report helps your community find better deals. +20 Points earned.</string>
     <string name="btn_done">Done</string>
 
     <!-- Profile Screen -->
-    <string name="profile_title">Karma Profile</string>
+    <string name="profile_title">Profile</string>
     <string name="loading_profile">Loading your profile…</string>
-    <string name="profile_karma_points">%1$d Karma Points</string>
+    <string name="profile_karma_points">%1$d Points</string>
     <string name="profile_member_since">Member since %1$s</string>
     <string name="profile_stat_reported">Reported</string>
     <string name="profile_stat_verified">Verified</string>
@@ -157,7 +157,7 @@
     <string name="prompt_still_price_subtitle">This price was observed %1$s. Help your neighbors keep prices accurate!</string>
     <string name="btn_yes_still_price">Yes, Still ₹%1$.0f</string>
     <string name="btn_no_price_changed">Price Changed</string>
-    <string name="freshness_confirmed_toast">Thank you! Price verified for %1$s. +5 Karma earned.</string>
+    <string name="freshness_confirmed_toast">Thank you! Price verified for %1$s. +5 Points earned.</string>
 
     <!-- Store Discrepancy Reporting (Plan Section 5) -->
     <string name="discrepancy_action_btn">Report Mismatch</string>
@@ -172,7 +172,7 @@
     <string name="discrepancy_notes_label">Additional details (optional)</string>
     <string name="discrepancy_notes_placeholder">e.g. Counter said ₹155 instead of ₹142 today morning</string>
     <string name="btn_submit_discrepancy">Report Discrepancy</string>
-    <string name="discrepancy_success_toast">Discrepancy reported. Community trust score updated. +10 Karma earned.</string>
+    <string name="discrepancy_success_toast">Discrepancy reported. Community trust score updated. +10 Points earned.</string>
 
     <!-- Barcode Scanner (Plan Sprint 5) -->
     <string name="scan_title">Scan Barcode</string>

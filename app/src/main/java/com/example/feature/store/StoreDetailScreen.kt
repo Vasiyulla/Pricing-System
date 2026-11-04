@@ -68,7 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.core.model.Store
 import com.example.core.model.StoreClaimStatus
 import com.example.core.model.StorePrice
@@ -80,7 +80,7 @@ fun StoreDetailScreen(
     storeId: String,
     onNavigateBack: () -> Unit,
     onNavigateToProductDetail: (String) -> Unit = {},
-    viewModel: StoreDetailViewModel = hiltViewModel()
+    viewModel: StoreDetailViewModel = viewModel { StoreDetailViewModel(storeId) }
 ) {
     val uiState by viewModel.uiState.collectAsState()
     StoreDetailContent(

@@ -21,7 +21,8 @@ class AuthViewModel(
     fun onEvent(event: AuthUiEvent) {
         when (event) {
             is AuthUiEvent.OnPhoneNumberChanged -> {
-                val cleaned = event.value.filter { it.isDigit() }.take(10)
+                val max = _uiState.value.selectedCountry.maxDigits
+                val cleaned = event.value.filter { it.isDigit() }.take(max)
                 _uiState.update { it.copy(phoneNumber = cleaned, errorMessage = null) }
             }
             is AuthUiEvent.OnOtpChanged -> {
@@ -33,6 +34,25 @@ class AuthViewModel(
             }
             is AuthUiEvent.OnFillDemoOtp -> {
                 _uiState.update { it.copy(otp = "123456", errorMessage = null) }
+            }
+            is AuthUiEvent.OnOpenCountryPicker -> {
+                _uiState.update { it.copy(isCountryPickerOpen = true, countrySearchQuery = "") }
+            }
+            is AuthUiEvent.OnDismissCountryPicker -> {
+                _uiState.update { it.copy(isCountryPickerOpen = false, countrySearchQuery = "") }
+            }
+            is AuthUiEvent.OnSelectCountry -> {
+                _uiState.update {
+                    it.copy(
+                        selectedCountry = event.country,
+                        isCountryPickerOpen = false,
+                        countrySearchQuery = "",
+                        phoneNumber = it.phoneNumber.take(event.country.maxDigits)
+                    )
+                }
+            }
+            is AuthUiEvent.OnCountrySearchQueryChanged -> {
+                _uiState.update { it.copy(countrySearchQuery = event.query) }
             }
             is AuthUiEvent.OnRequestOtp -> {
                 requestOtp()
@@ -61,6 +81,7 @@ class AuthViewModel(
             is AuthUiEvent.OnBackToPhone -> {
                 _uiState.update { it.copy(step = AuthStep.PHONE_INPUT, otp = "", errorMessage = null) }
             }
+
         }
     }
 
