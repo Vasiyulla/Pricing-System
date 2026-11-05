@@ -115,7 +115,7 @@ class NetworkPriceBridgeRepository(
     private val pendingOfflineCount = MutableStateFlow(0)
     private val queuedSubmissionsState = MutableStateFlow<List<QueuedSubmissionEntity>>(emptyList())
     private val submissionHistory = MutableStateFlow<List<PriceSubmission>>(emptyList())
-    private val isLoggedInState = MutableStateFlow(true)
+    private val isLoggedInState = MutableStateFlow(false)
 
     private val dismissedPromptId = MutableStateFlow<String?>(null)
 

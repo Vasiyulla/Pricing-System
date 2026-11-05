@@ -16,9 +16,9 @@ data class CountryCode(
 )
 
 val DEFAULT_COUNTRIES = listOf(
-    CountryCode(code = "+91", countryName = "India", flagEmoji = "🇮🇳", minDigits = 10, maxDigits = 10, placeholder = "98765 43210"),
+    CountryCode(code = "+44", countryName = "United Kingdom", flagEmoji = "🇬🇧", minDigits = 10, maxDigits = 11, placeholder = "07911 123456"),
     CountryCode(code = "+1", countryName = "United States", flagEmoji = "🇺🇸", minDigits = 10, maxDigits = 10, placeholder = "415 555 2671"),
-    CountryCode(code = "+44", countryName = "United Kingdom", flagEmoji = "🇬🇧", minDigits = 10, maxDigits = 11, placeholder = "7911 123456"),
+    CountryCode(code = "+91", countryName = "India", flagEmoji = "🇮🇳", minDigits = 10, maxDigits = 10, placeholder = "98765 43210"),
     CountryCode(code = "+971", countryName = "United Arab Emirates", flagEmoji = "🇦🇪", minDigits = 9, maxDigits = 9, placeholder = "50 123 4567"),
     CountryCode(code = "+966", countryName = "Saudi Arabia", flagEmoji = "🇸🇦", minDigits = 9, maxDigits = 9, placeholder = "50 123 4567"),
     CountryCode(code = "+65", countryName = "Singapore", flagEmoji = "🇸🇬", minDigits = 8, maxDigits = 8, placeholder = "8123 4567"),

@@ -210,7 +210,7 @@ fun AuthContent(
                         isConsentChecked = uiState.isConsentChecked,
                         isLoading = uiState.isLoading,
                         onPhoneChanged = { onEvent(AuthUiEvent.OnPhoneNumberChanged(it)) },
-                        onUseDemo = { onEvent(AuthUiEvent.OnUseDemoPhone("9876543210")) },
+                        onUseDemo = { onEvent(AuthUiEvent.OnUseDemoPhone("07911123456")) },
                         onOpenCountryPicker = { onEvent(AuthUiEvent.OnOpenCountryPicker) },
                         onToggleConsent = { onEvent(AuthUiEvent.OnToggleConsent(it)) },
                         onOpenConsentSheet = { onEvent(AuthUiEvent.OnOpenConsentSheet) },

@@ -88,11 +88,11 @@ class AuthViewModel(
     private fun requestOtp() {
         val state = _uiState.value
         if (!state.isPhoneValid) {
-            _uiState.update { it.copy(errorMessage = "Please enter a valid 10-digit Indian mobile number") }
+            _uiState.update { it.copy(errorMessage = "Please enter a valid mobile number (e.g. 07911 123456)") }
             return
         }
         if (!state.isConsentChecked) {
-            _uiState.update { it.copy(errorMessage = "Please agree to the DPDP Privacy Notice to proceed") }
+            _uiState.update { it.copy(errorMessage = "Please agree to the Privacy Notice to proceed") }
             return
         }
 
