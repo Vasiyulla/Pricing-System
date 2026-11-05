@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -15,29 +16,49 @@ import (
 )
 
 type AIService struct {
-	apiKey     string
-	httpClient *http.Client
+	geminiAPIKey string
+	nvidiaAPIKey string
+	nvidiaModel  string
+	httpClient   *http.Client
 }
 
 func NewAIService() *AIService {
-	key := os.Getenv("GEMINI_API_KEY")
+	geminiKey := os.Getenv("GEMINI_API_KEY")
+	nvidiaKey := os.Getenv("NVIDIA_API_KEY")
+	model := os.Getenv("NVIDIA_MODEL")
+	if model == "" {
+		model = "meta/llama-3.2-11b-vision-instruct"
+	}
 	return &AIService{
-		apiKey: key,
+		geminiAPIKey: geminiKey,
+		nvidiaAPIKey: nvidiaKey,
+		nvidiaModel:  model,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 45 * time.Second,
 		},
 	}
 }
 
 // ParseReceiptImage extracts items, prices, VAT, and loyalty discounts from a supermarket receipt
 func (s *AIService) ParseReceiptImage(ctx context.Context, imageBase64 string) (*domain.ExtractedReceipt, error) {
-	if s.apiKey != "" && imageBase64 != "" {
-		// Call Gemini 2.0 Flash Vision endpoint
-		result, err := s.callGeminiVisionForReceipt(ctx, imageBase64)
-		if err == nil && result != nil {
-			return result, nil
+	if imageBase64 != "" {
+		// Priority 1: NVIDIA NIM (Open-Source Llama 3.2 Vision / Qwen 2.5 VL via Cloud API)
+		if s.nvidiaAPIKey != "" {
+			result, err := s.callNvidiaNIMForReceipt(ctx, imageBase64)
+			if err == nil && result != nil {
+				return result, nil
+			}
+			log.Printf("[AIService] NVIDIA NIM error: %v. Attempting fallback...", err)
 		}
-		// If Gemini fails or times out, fallback to structured parser below
+
+		// Priority 2: Google Gemini Vision
+		if s.geminiAPIKey != "" {
+			result, err := s.callGeminiVisionForReceipt(ctx, imageBase64)
+			if err == nil && result != nil {
+				return result, nil
+			}
+			log.Printf("[AIService] Gemini Vision error: %v. Falling back to mock...", err)
+		}
 	}
 
 	// High-fidelity fallback / mock data for UK Supermarket receipt testing
@@ -116,7 +137,7 @@ func (s *AIService) callGeminiVisionForReceipt(ctx context.Context, imageBase64 
 		cleanBase64 = cleanBase64[idx+1:]
 	}
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s", s.apiKey)
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s", s.geminiAPIKey)
 
 	prompt := `You are an expert UK supermarket receipt OCR parser.
 Extract the store name, branch/store number, VAT number, receipt date, total in pence, and line items.
@@ -211,6 +232,123 @@ Respond strictly with valid JSON matching this schema:
 	var extracted domain.ExtractedReceipt
 	if err := json.Unmarshal([]byte(rawJSON), &extracted); err != nil {
 		return nil, err
+	}
+
+	return &extracted, nil
+}
+
+func (s *AIService) callNvidiaNIMForReceipt(ctx context.Context, imageBase64 string) (*domain.ExtractedReceipt, error) {
+	cleanBase64 := imageBase64
+	if idx := strings.Index(cleanBase64, ","); idx != -1 {
+		cleanBase64 = cleanBase64[idx+1:]
+	}
+
+	url := "https://integrate.api.nvidia.com/v1/chat/completions"
+
+	prompt := `You are an expert UK supermarket receipt OCR parser.
+Extract the store name, branch/store number, VAT number, receipt date, total in pence, and line items.
+For each line item extract:
+- name: string
+- quantity: int
+- regular_price_pence: int
+- loyalty_price_pence: int or null (e.g. Tesco Clubcard / Sainsbury's Nectar savings)
+- loyalty_scheme: 'CLUBCARD', 'NECTAR', 'LIDL_PLUS', or 'NONE'
+- vat_rate_percent: 0 for food/produce, 20 for non-food
+Respond strictly with valid JSON without any markdown formatting or code blocks:
+{
+  "store_name": "...",
+  "branch_number": "...",
+  "vat_number": "...",
+  "date": "...",
+  "total_pence": 0,
+  "vat_amount_pence": 0,
+  "items": [
+    {
+      "name": "...",
+      "quantity": 1,
+      "regular_price_pence": 0,
+      "loyalty_price_pence": null,
+      "loyalty_scheme": "NONE",
+      "vat_rate_percent": 0
+    }
+  ],
+  "is_math_valid": true
+}`
+
+	imageURI := fmt.Sprintf("data:image/jpeg;base64,%s", cleanBase64)
+
+	requestBody := map[string]interface{}{
+		"model": s.nvidiaModel,
+		"messages": []map[string]interface{}{
+			{
+				"role": "user",
+				"content": []map[string]interface{}{
+					{"type": "text", "text": prompt},
+					{
+						"type": "image_url",
+						"image_url": map[string]string{
+							"url": imageURI,
+						},
+					},
+				},
+			},
+		},
+		"temperature": 0.1,
+		"max_tokens":  1500,
+	}
+
+	bodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+s.nvidiaAPIKey)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("nvidia nim api error status %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var openAIResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&openAIResp); err != nil {
+		return nil, err
+	}
+
+	if len(openAIResp.Choices) == 0 {
+		return nil, fmt.Errorf("empty response from nvidia nim")
+	}
+
+	content := strings.TrimSpace(openAIResp.Choices[0].Message.Content)
+	if strings.HasPrefix(content, "```json") {
+		content = strings.TrimPrefix(content, "```json")
+		content = strings.TrimSuffix(content, "```")
+	} else if strings.HasPrefix(content, "```") {
+		content = strings.TrimPrefix(content, "```")
+		content = strings.TrimSuffix(content, "```")
+	}
+	content = strings.TrimSpace(content)
+
+	var extracted domain.ExtractedReceipt
+	if err := json.Unmarshal([]byte(content), &extracted); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal nvidia nim json: %w (raw: %s)", err, content)
 	}
 
 	return &extracted, nil
