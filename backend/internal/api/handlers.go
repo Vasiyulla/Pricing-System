@@ -20,6 +20,7 @@ type APIHandler struct {
 	priceRepo    repository.PriceRepository
 	bountyRepo   repository.BountyRepository
 	stickerRepo  repository.YellowStickerRepository
+	categoryRepo repository.CategoryRepository
 	compareSvc   *service.CompareService
 	optimizerSvc *service.OptimizerService
 	trolleySvc   *service.TrolleyService
@@ -32,6 +33,7 @@ func NewAPIHandler(
 	priceRepo repository.PriceRepository,
 	bountyRepo repository.BountyRepository,
 	stickerRepo repository.YellowStickerRepository,
+	categoryRepo repository.CategoryRepository,
 	compareSvc *service.CompareService,
 	optimizerSvc *service.OptimizerService,
 	trolleySvc *service.TrolleyService,
@@ -43,6 +45,7 @@ func NewAPIHandler(
 		priceRepo:    priceRepo,
 		bountyRepo:   bountyRepo,
 		stickerRepo:  stickerRepo,
+		categoryRepo: categoryRepo,
 		compareSvc:   compareSvc,
 		optimizerSvc: optimizerSvc,
 		trolleySvc:   trolleySvc,
@@ -342,6 +345,30 @@ func (h *APIHandler) ClaimBounty(w http.ResponseWriter, r *http.Request) {
 		"status":  "claimed",
 		"message": "Bounty claimed! Upload a photo of the shelf label to receive your points.",
 	})
+}
+
+func (h *APIHandler) GetActiveBountyPrompt(w http.ResponseWriter, r *http.Request) {
+	prompt, err := h.bountyRepo.GetActivePrompt(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if prompt == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{})
+		return
+	}
+	writeJSON(w, http.StatusOK, prompt)
+}
+
+// ── Categories ──
+
+func (h *APIHandler) GetCategories(w http.ResponseWriter, r *http.Request) {
+	categories, err := h.categoryRepo.GetAll(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, categories)
 }
 
 // ── Yellow Stickers ──

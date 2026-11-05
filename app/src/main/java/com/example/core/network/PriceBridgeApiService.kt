@@ -71,6 +71,12 @@ interface PriceBridgeApiService {
         @Query("store_id") storeId: String? = null
     ): List<NetworkYellowStickerDeal>
 
+    @GET("api/v1/categories")
+    suspend fun getCategories(): List<NetworkCategory>
+
+    @GET("api/v1/bounties/prompt")
+    suspend fun getActiveBountyPrompt(): NetworkBountyPrompt?
+
     @POST("api/v1/ai/receipt-scan")
     suspend fun scanReceiptAI(@Body payload: Map<String, String>): NetworkExtractedReceipt
 

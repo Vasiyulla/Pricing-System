@@ -24,6 +24,7 @@ type PostgresStore struct {
 	priceRepo          PriceRepository
 	bountyRepo         BountyRepository
 	yellowStickerRepo  YellowStickerRepository
+	categoryRepo       CategoryRepository
 }
 
 func NewPostgresStore(ctx context.Context, databaseURL string) (*PostgresStore, error) {
@@ -66,6 +67,7 @@ func NewPostgresStore(ctx context.Context, databaseURL string) (*PostgresStore, 
 	store.priceRepo = &pgPriceRepo{pool: pool}
 	store.bountyRepo = &pgBountyRepo{pool: pool}
 	store.yellowStickerRepo = &pgYellowStickerRepo{pool: pool}
+	store.categoryRepo = &pgCategoryRepo{pool: pool}
 
 	// Auto-seed if stores table is empty
 	if err := store.seedIfEmpty(ctx); err != nil {
@@ -80,6 +82,7 @@ func (s *PostgresStore) ProductRepo() ProductRepository             { return s.p
 func (s *PostgresStore) PriceRepo() PriceRepository                 { return s.priceRepo }
 func (s *PostgresStore) BountyRepo() BountyRepository               { return s.bountyRepo }
 func (s *PostgresStore) YellowStickerRepo() YellowStickerRepository { return s.yellowStickerRepo }
+func (s *PostgresStore) CategoryRepo() CategoryRepository           { return s.categoryRepo }
 func (s *PostgresStore) Close()                                     { s.pool.Close() }
 
 func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {
@@ -511,6 +514,40 @@ func (r *pgBountyRepo) Create(ctx context.Context, b domain.Bounty) error {
 	return err
 }
 
+func (r *pgBountyRepo) GetActivePrompt(ctx context.Context) (*domain.BountyPrompt, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT b.id, COALESCE(p.name, b.task_description), COALESCE(s.name, 'Nearby Store'),
+		       COALESCE(pr.regular_price_pence, 145), b.reward_points
+		FROM bounties b
+		LEFT JOIN products p ON b.product_id = p.id
+		LEFT JOIN stores s ON b.store_id = s.id
+		LEFT JOIN LATERAL (
+			SELECT regular_price_pence FROM price_records
+			WHERE product_id = b.product_id AND store_id = b.store_id
+			ORDER BY observed_at DESC LIMIT 1
+		) pr ON true
+		WHERE b.is_claimed = FALSE
+		ORDER BY b.reward_points DESC
+		LIMIT 1;
+	`)
+	var id, prodName, storeName string
+	var pricePence, rewardPoints int
+	err := row.Scan(&id, &prodName, &storeName, &pricePence, &rewardPoints)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &domain.BountyPrompt{
+		BountyID:          id,
+		ProductName:       prodName,
+		StoreName:         storeName,
+		LastObservedPrice: fmt.Sprintf("£%.2f", float64(pricePence)/100.0),
+		RewardPoints:      rewardPoints,
+	}, nil
+}
+
 // ─────────────────────────────────────────────────────────────
 // YELLOW STICKER REPOSITORY IMPLEMENTATION
 // ─────────────────────────────────────────────────────────────
@@ -557,5 +594,30 @@ func (r *pgYellowStickerRepo) Create(ctx context.Context, d domain.YellowSticker
 		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, d.ID, d.StoreID, d.ProductName, d.WasPricePence, d.NowPricePence, d.DiscountPercent, d.UseByDate)
 	return err
+}
+
+// ─────────────────────────────────────────────────────────────
+// CATEGORY REPOSITORY IMPLEMENTATION
+// ─────────────────────────────────────────────────────────────
+
+type pgCategoryRepo struct {
+	pool *pgxpool.Pool
+}
+
+func (r *pgCategoryRepo) GetAll(ctx context.Context) ([]domain.Category, error) {
+	rows, err := r.pool.Query(ctx, "SELECT id, name FROM categories ORDER BY (id = 'all') DESC, name ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var categories []domain.Category
+	for rows.Next() {
+		var c domain.Category
+		if err := rows.Scan(&c.ID, &c.Name); err == nil {
+			categories = append(categories, c)
+		}
+	}
+	return categories, nil
 }
 

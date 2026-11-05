@@ -152,3 +152,18 @@ data class NetworkExtractedReceipt(
     @Json(name = "is_math_valid") val isMathValid: Boolean
 )
 
+@JsonClass(generateAdapter = true)
+data class NetworkCategory(
+    val id: String,
+    val name: String
+)
+
+@JsonClass(generateAdapter = true)
+data class NetworkBountyPrompt(
+    @Json(name = "bounty_id") val bountyId: String = "",
+    @Json(name = "product_name") val productName: String = "",
+    @Json(name = "store_name") val storeName: String = "",
+    @Json(name = "last_observed_price") val lastObservedPrice: String = "",
+    @Json(name = "reward_points") val rewardPoints: Int = 0
+)
+

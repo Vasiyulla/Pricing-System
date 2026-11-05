@@ -57,8 +57,12 @@ func NewRouter(h *APIHandler) *chi.Mux {
 		// AI Bounty Hunter
 		r.Route("/bounties", func(r chi.Router) {
 			r.Get("/nearby", h.GetNearbyBounties)
+			r.Get("/prompt", h.GetActiveBountyPrompt)
 			r.Post("/{id}/claim", h.ClaimBounty)
 		})
+
+		// Categories
+		r.Get("/categories", h.GetCategories)
 
 		// Yellow Sticker Deals
 		r.Get("/yellow-stickers/active", h.GetActiveYellowStickers)

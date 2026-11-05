@@ -2,6 +2,21 @@ package domain
 
 import "time"
 
+// Category represents a product category taxonomy
+type Category struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// BountyPrompt represents an interactive prompt for user price verification
+type BountyPrompt struct {
+	BountyID          string `json:"bounty_id"`
+	ProductName       string `json:"product_name"`
+	StoreName         string `json:"store_name"`
+	LastObservedPrice string `json:"last_observed_price"`
+	RewardPoints      int    `json:"reward_points"`
+}
+
 // StoreChain represents major UK supermarket chains
 type StoreChain string
 

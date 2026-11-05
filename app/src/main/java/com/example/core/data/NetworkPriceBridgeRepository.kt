@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
@@ -69,73 +70,25 @@ class NetworkPriceBridgeRepository(
         )
     )
 
-    private val categories = MutableStateFlow(
-        listOf(
-            Category(id = "all", name = "All"),
-            Category(id = "Dairy & Chilled", name = "Dairy & Chilled"),
-            Category(id = "Bakery", name = "Bakery"),
-            Category(id = "Pantry & Staples", name = "Pantry & Staples"),
-            Category(id = "Produce", name = "Fresh Produce"),
-            Category(id = "Beverages", name = "Beverages")
-        )
-    )
-
-    private val karmaPromptState = MutableStateFlow<KarmaVerificationPrompt?>(
-        KarmaVerificationPrompt(
-            id = "prompt_sainsburys_camden",
-            storeName = "Sainsbury's Camden",
-            description = "Sainsbury's just updated shelf prices. Verify a shelf photo or receipt to earn Karma points!",
-            karmaRewardPoints = 25
-        )
-    )
-
     private val basketSummary = MutableStateFlow(
         SmartBasketSummary(
-            estimatedSavingsAmount = 14.80,
-            storesComparedCount = 8,
-            storeNamesSample = listOf("Lidl", "Aldi", "Sainsbury's", "Tesco"),
-            basketItemCount = 4,
-            basketName = "Weekly Essentials"
+            estimatedSavingsAmount = 0.0,
+            storesComparedCount = 0,
+            storeNamesSample = emptyList(),
+            basketItemCount = 0,
+            basketName = "My Shopping List"
         )
     )
 
     private val shoppingBasketState = MutableStateFlow(
         ShoppingBasket(
             id = "active_basket",
-            title = "Weekly Essentials",
-            items = listOf(
-                ShoppingListItem(
-                    id = "item_1",
-                    productName = "British Whole Milk 4 Pints",
-                    quantity = 1,
-                    packageSize = "2.27L",
-                    unit = "bottle",
-                    isChecked = false,
-                    bestStoreName = "Aldi Camden",
-                    bestStorePrice = 1.45,
-                    lastObservedRelativeTime = "1h ago",
-                    statusBadge = PriceStatusBadgeType.CommunityCorroborated
-                ),
-                ShoppingListItem(
-                    id = "item_2",
-                    productName = "Lurpak Spreadable Butter",
-                    quantity = 1,
-                    packageSize = "500g",
-                    unit = "tub",
-                    isChecked = false,
-                    bestStoreName = "Tesco Express",
-                    bestStorePrice = 3.00,
-                    lastObservedRelativeTime = "2h ago",
-                    statusBadge = PriceStatusBadgeType.RecentlyObserved
-                )
-            ),
-            singleStoreEstimatedTotal = 6.15,
-            optimizedEstimatedTotal = 4.45,
-            estimatedSavingsAmount = 1.70,
-            storeSplits = listOf(
-                StoreSplitSummary("Aldi Camden", 1, 1.45),
-                StoreSplitSummary("Tesco Express", 1, 3.00)
-            )
+            title = "My Shopping List",
+            items = emptyList(),
+            singleStoreEstimatedTotal = 0.0,
+            optimizedEstimatedTotal = 0.0,
+            estimatedSavingsAmount = 0.0,
+            storeSplits = emptyList()
         )
     )
 
@@ -155,27 +108,16 @@ class NetworkPriceBridgeRepository(
         )
     )
 
-    private val recentSearches = MutableStateFlow(
-        listOf("Milk", "Lurpak", "Cheddar", "Bread", "Eggs")
-    )
+    private val recentSearches = MutableStateFlow<List<String>>(emptyList())
 
-    private val notifications = MutableStateFlow(
-        listOf(
-            AppNotification(
-                id = "notif_1",
-                title = "Live Backend Connected \uD83D\uDE80",
-                message = "Connected to live Price Bridge Render backend (London market).",
-                timestampRelative = "Just now",
-                type = NotificationType.FRESHNESS_ALERT,
-                isRead = false
-            )
-        )
-    )
+    private val notifications = MutableStateFlow<List<AppNotification>>(emptyList())
 
     private val pendingOfflineCount = MutableStateFlow(0)
     private val queuedSubmissionsState = MutableStateFlow<List<QueuedSubmissionEntity>>(emptyList())
     private val submissionHistory = MutableStateFlow<List<PriceSubmission>>(emptyList())
     private val isLoggedInState = MutableStateFlow(true)
+
+    private val dismissedPromptId = MutableStateFlow<String?>(null)
 
     // ── Location & Feed ──
 
@@ -183,9 +125,38 @@ class NetworkPriceBridgeRepository(
 
     override fun getSmartBasketSummary(): Flow<SmartBasketSummary> = basketSummary.asStateFlow()
 
-    override fun getCategories(): Flow<List<Category>> = categories.asStateFlow()
+    override fun getCategories(): Flow<List<Category>> = flow {
+        try {
+            val netCats = api.service.getCategories()
+            if (netCats.isNotEmpty()) {
+                emit(netCats.map { Category(id = it.id, name = it.name) })
+            } else {
+                emit(listOf(Category(id = "all", name = "All")))
+            }
+        } catch (_: Exception) {
+            emit(listOf(Category(id = "all", name = "All")))
+        }
+    }.flowOn(Dispatchers.IO)
 
-    override fun getKarmaPrompt(): Flow<KarmaVerificationPrompt?> = karmaPromptState.asStateFlow()
+    override fun getKarmaPrompt(): Flow<KarmaVerificationPrompt?> = flow {
+        try {
+            val prompt = api.service.getActiveBountyPrompt()
+            if (prompt != null && prompt.bountyId.isNotEmpty() && prompt.bountyId != dismissedPromptId.value) {
+                emit(
+                    KarmaVerificationPrompt(
+                        id = prompt.bountyId,
+                        storeName = prompt.storeName,
+                        description = "Is ${prompt.productName} still ${prompt.lastObservedPrice} at ${prompt.storeName}? Verify shelf tag to earn Karma points!",
+                        karmaRewardPoints = prompt.rewardPoints
+                    )
+                )
+            } else {
+                emit(null)
+            }
+        } catch (_: Exception) {
+            emit(null)
+        }
+    }.flowOn(Dispatchers.IO)
 
     override fun getBestDeals(categoryId: String?): Flow<List<Product>> = flow {
         try {
@@ -392,55 +363,106 @@ class NetworkPriceBridgeRepository(
 
     // ── Shopping Basket & Tasks ──
 
+    private fun recalculateBasketState(basket: ShoppingBasket): ShoppingBasket {
+        val total = basket.items.sumOf { (it.bestStorePrice ?: 0.0) * it.quantity }
+        val stores = basket.items.groupBy { it.bestStoreName ?: "Store" }.map { (store, items) ->
+            StoreSplitSummary(
+                storeName = store,
+                itemCount = items.sumOf { it.quantity },
+                subtotal = items.sumOf { (it.bestStorePrice ?: 0.0) * it.quantity }
+            )
+        }
+        val updated = basket.copy(
+            singleStoreEstimatedTotal = total,
+            optimizedEstimatedTotal = total * 0.90,
+            estimatedSavingsAmount = total * 0.10,
+            storeSplits = stores
+        )
+        basketSummary.value = SmartBasketSummary(
+            estimatedSavingsAmount = updated.estimatedSavingsAmount,
+            storesComparedCount = stores.size,
+            storeNamesSample = stores.map { it.storeName },
+            basketItemCount = updated.items.sumOf { it.quantity },
+            basketName = updated.title
+        )
+        return updated
+    }
+
     override fun getShoppingBasket(): Flow<ShoppingBasket> = shoppingBasketState.asStateFlow()
 
     override suspend fun toggleItemChecked(itemId: String) {
         shoppingBasketState.update { basket ->
-            basket.copy(
+            recalculateBasketState(basket.copy(
                 items = basket.items.map {
                     if (it.id == itemId) it.copy(isChecked = !it.isChecked) else it
                 }
-            )
+            ))
         }
     }
 
     override suspend fun updateItemQuantity(itemId: String, newQuantity: Int) {
         shoppingBasketState.update { basket ->
-            basket.copy(
+            recalculateBasketState(basket.copy(
                 items = basket.items.map {
                     if (it.id == itemId) it.copy(quantity = newQuantity) else it
                 }
-            )
+            ))
         }
     }
 
     override suspend fun addShoppingItem(name: String, quantity: Int, packageSize: String) {
+        var bestPrice = 1.50
+        var bestStore = "Nearest Supermarket"
+        var timeAgo = "Just now"
+        var badge = PriceStatusBadgeType.RecentlyObserved
+
+        try {
+            val results = withContext(Dispatchers.IO) { api.service.searchProducts(name) }
+            val matched = results.firstOrNull()
+            if (matched != null) {
+                val comps = withContext(Dispatchers.IO) { api.service.compareProductPrices(matched.id, currentLat, currentLon) }
+                val best = comps.minByOrNull { it.effectivePricePence }
+                if (best != null) {
+                    bestPrice = best.effectivePricePence / 100.0
+                    bestStore = best.store.name
+                    timeAgo = best.observedAgo
+                    badge = when (best.freshnessStatus) {
+                        "STORE_CONFIRMED" -> PriceStatusBadgeType.StoreConfirmed
+                        "COMMUNITY_CORROBORATED" -> PriceStatusBadgeType.CommunityCorroborated
+                        "OUTDATED" -> PriceStatusBadgeType.PriceMayBeOutdated
+                        else -> PriceStatusBadgeType.RecentlyObserved
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        val newItem = ShoppingListItem(
+            id = UUID.randomUUID().toString(),
+            productName = name,
+            quantity = quantity,
+            packageSize = packageSize.ifBlank { "1 unit" },
+            unit = "unit",
+            bestStorePrice = bestPrice,
+            bestStoreName = bestStore,
+            lastObservedRelativeTime = timeAgo,
+            statusBadge = badge,
+            isChecked = false
+        )
+
         shoppingBasketState.update { basket ->
-            val newItem = ShoppingListItem(
-                id = UUID.randomUUID().toString(),
-                productName = name,
-                quantity = quantity,
-                packageSize = packageSize,
-                unit = "unit",
-                bestStorePrice = 1.50,
-                bestStoreName = "Nearest Store",
-                lastObservedRelativeTime = "Just now",
-                statusBadge = PriceStatusBadgeType.RecentlyObserved,
-                isChecked = false
-            )
-            basket.copy(items = basket.items + newItem)
+            recalculateBasketState(basket.copy(items = basket.items + newItem))
         }
     }
 
     override suspend fun deleteShoppingItem(itemId: String) {
         shoppingBasketState.update { basket ->
-            basket.copy(items = basket.items.filter { it.id != itemId })
+            recalculateBasketState(basket.copy(items = basket.items.filter { it.id != itemId }))
         }
     }
 
     override suspend fun clearCheckedItems() {
         shoppingBasketState.update { basket ->
-            basket.copy(items = basket.items.filter { !it.isChecked })
+            recalculateBasketState(basket.copy(items = basket.items.filter { !it.isChecked }))
         }
     }
 
@@ -532,7 +554,7 @@ class NetworkPriceBridgeRepository(
     }
 
     override suspend fun dismissKarmaPrompt(promptId: String) {
-        karmaPromptState.value = null
+        dismissedPromptId.value = promptId
     }
 
     // ── Mapper Extensions ──

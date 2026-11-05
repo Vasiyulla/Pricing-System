@@ -298,6 +298,40 @@ func (r *memoryBountyRepo) Create(ctx context.Context, bounty domain.Bounty) err
 	return nil
 }
 
+func (r *memoryBountyRepo) GetActivePrompt(ctx context.Context) (*domain.BountyPrompt, error) {
+	r.ms.mu.RLock()
+	defer r.ms.mu.RUnlock()
+	for _, b := range r.ms.bounties {
+		if b.Status == "OPEN" {
+			return &domain.BountyPrompt{
+				BountyID:          b.ID,
+				ProductName:       b.ProductName,
+				StoreName:         b.StoreName,
+				LastObservedPrice: "£1.45",
+				RewardPoints:      b.RewardPoints,
+			}, nil
+		}
+	}
+	return nil, nil
+}
+
+// ── Category Repository Adapter ──
+
+type memoryCategoryRepo struct{ ms *MemoryStore }
+
+func (r *memoryCategoryRepo) GetAll(ctx context.Context) ([]domain.Category, error) {
+	return []domain.Category{
+		{ID: "all", Name: "All"},
+		{ID: "Dairy & Chilled", Name: "Dairy & Chilled"},
+		{ID: "Bakery", Name: "Bakery"},
+		{ID: "Pantry & Staples", Name: "Pantry & Staples"},
+		{ID: "Fresh Produce", Name: "Fresh Produce"},
+		{ID: "Beverages", Name: "Beverages"},
+		{ID: "Meat & Poultry", Name: "Meat & Poultry"},
+		{ID: "Frozen Foods", Name: "Frozen Foods"},
+	}, nil
+}
+
 // ── Yellow Sticker Repository Adapter ──
 
 type memoryYellowStickerRepo struct{ ms *MemoryStore }
@@ -332,6 +366,7 @@ func (ms *MemoryStore) ProductRepo() ProductRepository             { return &mem
 func (ms *MemoryStore) PriceRepo() PriceRepository                 { return &memoryPriceRepo{ms: ms} }
 func (ms *MemoryStore) BountyRepo() BountyRepository               { return &memoryBountyRepo{ms: ms} }
 func (ms *MemoryStore) YellowStickerRepo() YellowStickerRepository { return &memoryYellowStickerRepo{ms: ms} }
+func (ms *MemoryStore) CategoryRepo() CategoryRepository           { return &memoryCategoryRepo{ms: ms} }
 
 // ── London Seed Data ──
 

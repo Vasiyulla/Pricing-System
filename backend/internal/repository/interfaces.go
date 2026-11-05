@@ -32,6 +32,11 @@ type BountyRepository interface {
 	GetNearby(ctx context.Context, lat, lon, radiusKm float64) ([]domain.Bounty, error)
 	Claim(ctx context.Context, bountyID string) error
 	Create(ctx context.Context, bounty domain.Bounty) error
+	GetActivePrompt(ctx context.Context) (*domain.BountyPrompt, error)
+}
+
+type CategoryRepository interface {
+	GetAll(ctx context.Context) ([]domain.Category, error)
 }
 
 type YellowStickerRepository interface {

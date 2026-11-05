@@ -31,6 +31,7 @@ func main() {
 	var priceRepo repository.PriceRepository
 	var bountyRepo repository.BountyRepository
 	var stickerRepo repository.YellowStickerRepository
+	var categoryRepo repository.CategoryRepository
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL != "" {
@@ -46,6 +47,7 @@ func main() {
 		priceRepo = pgStore.PriceRepo()
 		bountyRepo = pgStore.BountyRepo()
 		stickerRepo = pgStore.YellowStickerRepo()
+		categoryRepo = pgStore.CategoryRepo()
 		log.Printf("Storage Engine: PostgreSQL 16 + PostGIS with persistent append-only ledger")
 	} else {
 		log.Printf("DATABASE_URL not set. Initializing in-memory store...")
@@ -55,6 +57,7 @@ func main() {
 		priceRepo = memStore.PriceRepo()
 		bountyRepo = memStore.BountyRepo()
 		stickerRepo = memStore.YellowStickerRepo()
+		categoryRepo = memStore.CategoryRepo()
 		log.Printf("Storage Engine: In-memory store (10 London Supermarkets, 25 Staple Products)")
 	}
 
@@ -66,7 +69,7 @@ func main() {
 
 	// 3. Initialize API Handler & Chi Router
 	handler := api.NewAPIHandler(
-		storeRepo, prodRepo, priceRepo, bountyRepo, stickerRepo,
+		storeRepo, prodRepo, priceRepo, bountyRepo, stickerRepo, categoryRepo,
 		compareSvc, optimizerSvc, trolleySvc, aiSvc,
 	)
 	router := api.NewRouter(handler)
