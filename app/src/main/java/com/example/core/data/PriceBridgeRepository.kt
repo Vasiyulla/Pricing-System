@@ -106,6 +106,9 @@ interface PriceBridgeRepository {
     fun getNotifications(): Flow<List<com.example.core.model.AppNotification>>
     suspend fun markNotificationAsRead(notificationId: String)
     suspend fun markAllNotificationsAsRead()
+    fun getActiveYellowStickers(): Flow<List<com.example.feature.yellowsticker.YellowStickerItem>>
+    fun getNearbyBounties(): Flow<List<com.example.feature.bounty.BountyItem>>
+    suspend fun claimBounty(bountyId: String): Boolean
 
     // ── Settings ──
     suspend fun updateLocation(neighborhood: String, radiusKm: Double)

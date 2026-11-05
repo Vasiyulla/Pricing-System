@@ -33,6 +33,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.core.data.PriceBridgeRepositoryProvider
 
 data class BountyItem(
     val id: String,
@@ -54,29 +57,8 @@ data class BountyItem(
 fun BountyRadarScreen(
     onNavigateBack: () -> Unit
 ) {
-    val sampleBounties = listOf(
-        BountyItem(
-            id = "b1",
-            storeName = "Morrisons Chalk Farm",
-            productName = "British Fresh Chicken Breast Fillets 650g",
-            rewardPoints = 50,
-            distance = "0.4 miles away"
-        ),
-        BountyItem(
-            id = "b2",
-            storeName = "M&S Foodhall Covent Garden",
-            productName = "Warburtons Toastie Thick Sliced White Bread",
-            rewardPoints = 75,
-            distance = "0.8 miles away"
-        ),
-        BountyItem(
-            id = "b3",
-            storeName = "Asda Old Kent Road Superstore",
-            productName = "Filippo Berio Extra Virgin Olive Oil 500ml",
-            rewardPoints = 100,
-            distance = "1.2 miles away"
-        )
-    )
+    val bounties by PriceBridgeRepositoryProvider.repository.getNearbyBounties()
+        .collectAsState(initial = emptyList())
 
     Scaffold(
         topBar = {
@@ -125,8 +107,32 @@ fun BountyRadarScreen(
             Text("Nearby High-Demand Bounties", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(Modifier.height(10.dp))
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(sampleBounties) { bounty ->
+            if (bounties.isEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "No active price verification bounties right now",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "All nearby store prices are currently up to date!",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(bounties) { bounty ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -170,5 +176,6 @@ fun BountyRadarScreen(
             }
         }
     }
+}
 }
 

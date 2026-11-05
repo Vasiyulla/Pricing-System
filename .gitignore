@@ -117,3 +117,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 scripts/__pycache__/
+
+# ── 9. AI Assistant & Local Agents ──
+.agent/
+.agents/
+.agent
+.agents
+

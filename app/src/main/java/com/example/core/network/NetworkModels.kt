@@ -167,3 +167,28 @@ data class NetworkBountyPrompt(
     @Json(name = "reward_points") val rewardPoints: Int = 0
 )
 
+@JsonClass(generateAdapter = true)
+data class NetworkProductDealSummary(
+    val product: NetworkProduct,
+    @Json(name = "best_price_pence") val bestPricePence: Int,
+    @Json(name = "best_price_gbp") val bestPriceGbp: String,
+    @Json(name = "best_store_name") val bestStoreName: String,
+    @Json(name = "best_store_id") val bestStoreId: String = "",
+    @Json(name = "best_store_distance_km") val bestStoreDistanceKm: Double = 0.5,
+    @Json(name = "compared_store_count") val comparedStoreCount: Int = 1,
+    @Json(name = "freshness_status") val freshnessStatus: String = "RECENTLY_OBSERVED",
+    val alternatives: List<NetworkStorePriceComparison> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class NetworkUserSession(
+    val id: String,
+    val email: String,
+    @Json(name = "display_name") val displayName: String,
+    @Json(name = "avatar_url") val avatarUrl: String? = null,
+    val role: String = "ActiveContributor",
+    val token: String = "",
+    @Json(name = "karma_points") val karmaPoints: Int = 350,
+    @Json(name = "auth_mode") val authMode: String = "GOOGLE"
+)
+

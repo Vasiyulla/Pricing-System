@@ -34,6 +34,8 @@ import com.example.core.data.PriceBridgeRepositoryProvider
 
 import com.example.core.location.DeviceLocationManager
 
+import com.example.core.session.AppSessionManager
+
 import kotlinx.coroutines.CoroutineScope
 
 import kotlinx.coroutines.Dispatchers
@@ -146,6 +148,9 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
 
+        AppSessionManager.init(this)
+        PriceBridgeRepositoryProvider.init(this)
+
         enableEdgeToEdge()
 
         setContent {
@@ -172,7 +177,7 @@ fun PriceBridgeNavHost(
 
 ) {
 
-    val isLoggedIn by PriceBridgeRepositoryProvider.repository.isUserLoggedIn().collectAsStateWithLifecycle(initialValue = false)
+    val isLoggedIn by AppSessionManager.isLoggedIn.collectAsStateWithLifecycle(initialValue = false)
     val startDestination = if (isLoggedIn) Routes.HOME else Routes.AUTH
 
     NavHost(

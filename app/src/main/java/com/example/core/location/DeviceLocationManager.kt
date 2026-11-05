@@ -16,16 +16,40 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 /**
+ * Structured geographic location with accuracy bounds and London postal context.
+ */
+data class GeoLocation(
+    val latitude: Double,
+    val longitude: Double,
+    val accuracyMeters: Float = 0f,
+    val isFreshGps: Boolean = false,
+    val areaName: String = "Camden Town (NW1)"
+)
+
+/**
  * Enterprise Location Manager that queries real device GPS coordinates
  * via Google Play Services FusedLocationProviderClient with zero extra dependencies.
+ * Respects DPDP privacy: strictly on-demand, no continuous background tracking.
  */
 class DeviceLocationManager(private val context: Context) {
 
     private val fusedLocationClient: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
 
-    // Default to Camden / Central London if permission not yet granted
-    private val _currentCoordinates = MutableStateFlow(Pair(51.5074, -0.1278))
+    // Default to Camden Town / Central London (NW1) if permission not yet granted
+    private val _currentLocation = MutableStateFlow(
+        GeoLocation(
+            latitude = 51.5390,
+            longitude = -0.1426,
+            accuracyMeters = 15.0f,
+            isFreshGps = false,
+            areaName = "Camden Town (NW1)"
+        )
+    )
+    val currentLocation: StateFlow<GeoLocation> = _currentLocation.asStateFlow()
+
+    // Backward-compatible coordinate pair flow
+    private val _currentCoordinates = MutableStateFlow(Pair(51.5390, -0.1426))
     val currentCoordinates: StateFlow<Pair<Double, Double>> = _currentCoordinates.asStateFlow()
 
     fun hasLocationPermission(): Boolean {
@@ -42,44 +66,98 @@ class DeviceLocationManager(private val context: Context) {
         return fineLocation || coarseLocation
     }
 
+    /**
+     * Queries accurate GPS coordinates on-demand with configurable precision.
+     * Use highAccuracy = true for price submission and store check-in (<30m radius).
+     * Use highAccuracy = false for browsing feeds to minimize battery drain.
+     */
     @SuppressLint("MissingPermission")
-    suspend fun refreshLocation(): Pair<Double, Double> {
+    suspend fun getAccurateLocation(highAccuracy: Boolean = true): GeoLocation {
         if (!hasLocationPermission()) {
-            return _currentCoordinates.value
+            return _currentLocation.value
+        }
+
+        val priority = if (highAccuracy) {
+            Priority.PRIORITY_HIGH_ACCURACY
+        } else {
+            Priority.PRIORITY_BALANCED_POWER_ACCURACY
         }
 
         return suspendCancellableCoroutine { continuation ->
             val cts = CancellationTokenSource()
             continuation.invokeOnCancellation { cts.cancel() }
 
-            fusedLocationClient.getCurrentLocation(
-                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                cts.token
-            ).addOnSuccessListener { location: Location? ->
-                if (location != null) {
-                    val coords = Pair(location.latitude, location.longitude)
-                    _currentCoordinates.value = coords
-                    continuation.resume(coords)
-                } else {
-                    fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc: Location? ->
-                        if (lastLoc != null) {
-                            val coords = Pair(lastLoc.latitude, lastLoc.longitude)
-                            _currentCoordinates.value = coords
-                            continuation.resume(coords)
-                        } else {
-                            continuation.resume(_currentCoordinates.value)
+            fusedLocationClient.getCurrentLocation(priority, cts.token)
+                .addOnSuccessListener { location: Location? ->
+                    if (location != null) {
+                        val geo = GeoLocation(
+                            latitude = location.latitude,
+                            longitude = location.longitude,
+                            accuracyMeters = location.accuracy,
+                            isFreshGps = true,
+                            areaName = resolveLondonArea(location.latitude, location.longitude)
+                        )
+                        _currentLocation.value = geo
+                        _currentCoordinates.value = Pair(geo.latitude, geo.longitude)
+                        continuation.resume(geo)
+                    } else {
+                        // Fall back to cached lastLocation
+                        fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc: Location? ->
+                            if (lastLoc != null) {
+                                val geo = GeoLocation(
+                                    latitude = lastLoc.latitude,
+                                    longitude = lastLoc.longitude,
+                                    accuracyMeters = lastLoc.accuracy,
+                                    isFreshGps = false,
+                                    areaName = resolveLondonArea(lastLoc.latitude, lastLoc.longitude)
+                                )
+                                _currentLocation.value = geo
+                                _currentCoordinates.value = Pair(geo.latitude, geo.longitude)
+                                continuation.resume(geo)
+                            } else {
+                                continuation.resume(_currentLocation.value)
+                            }
+                        }.addOnFailureListener {
+                            continuation.resume(_currentLocation.value)
                         }
-                    }.addOnFailureListener {
-                        continuation.resume(_currentCoordinates.value)
                     }
                 }
-            }.addOnFailureListener {
-                continuation.resume(_currentCoordinates.value)
-            }
+                .addOnFailureListener {
+                    continuation.resume(_currentLocation.value)
+                }
         }
     }
 
-    fun updateCoordinates(lat: Double, lon: Double) {
+    @SuppressLint("MissingPermission")
+    suspend fun refreshLocation(): Pair<Double, Double> {
+        val geo = getAccurateLocation(highAccuracy = false)
+        return Pair(geo.latitude, geo.longitude)
+    }
+
+    fun updateCoordinates(lat: Double, lon: Double, areaName: String = "Central London") {
+        val geo = GeoLocation(
+            latitude = lat,
+            longitude = lon,
+            accuracyMeters = 5.0f,
+            isFreshGps = false,
+            areaName = areaName
+        )
+        _currentLocation.value = geo
         _currentCoordinates.value = Pair(lat, lon)
+    }
+
+    /**
+     * Maps London coordinates to borough / postal district for display
+     */
+    private fun resolveLondonArea(lat: Double, lon: Double): String {
+        return when {
+            lat >= 51.530 && lon in -0.160..-0.130 -> "Camden Town (NW1)"
+            lat in 51.510..51.525 && lon in -0.140..-0.115 -> "Covent Garden / Soho (WC2)"
+            lat in 51.525..51.545 && lon in -0.115..-0.080 -> "Angel & Islington (N1)"
+            lat in 51.515..51.535 && lon in -0.090..-0.050 -> "Shoreditch & Hackney (E1)"
+            lat in 51.455..51.480 && lon in -0.130..-0.090 -> "Brixton & Lambeth (SW9)"
+            lat in 51.490..51.510 && lon in -0.200..-0.160 -> "Kensington & Chelsea (SW7)"
+            else -> "Greater London"
+        }
     }
 }

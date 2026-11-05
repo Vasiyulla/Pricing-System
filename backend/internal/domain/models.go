@@ -64,17 +64,56 @@ const (
 	FreshnessFlagged               FreshnessStatus = "FLAGGED_FOR_REVIEW"
 )
 
+// StoreVerificationStatus represents the verification tier of a store
+type StoreVerificationStatus string
+
+const (
+	StoreStatusVerifiedChain         StoreVerificationStatus = "VERIFIED_CHAIN"
+	StoreStatusFSAVerified           StoreVerificationStatus = "FSA_VERIFIED"
+	StoreStatusOSMVerified           StoreVerificationStatus = "OSM_VERIFIED"
+	StoreStatusCommunityPending      StoreVerificationStatus = "COMMUNITY_PENDING"
+	StoreStatusCommunityCorroborated StoreVerificationStatus = "COMMUNITY_CORROBORATED"
+	StoreStatusFlaggedInactive       StoreVerificationStatus = "FLAGGED_INACTIVE"
+)
+
 // Store represents a physical supermarket branch
 type Store struct {
-	ID        string      `json:"id"`
-	Chain     StoreChain  `json:"chain"`
-	Format    StoreFormat `json:"format"`
-	Name      string      `json:"name"`
-	Latitude  float64     `json:"latitude"`
-	Longitude float64     `json:"longitude"`
-	Address   string      `json:"address"`
-	Postcode  string      `json:"postcode"`
-	DistanceKm float64    `json:"distance_km,omitempty"`
+	ID                 string                  `json:"id"`
+	Chain              StoreChain              `json:"chain"`
+	Format             StoreFormat             `json:"format"`
+	Name               string                  `json:"name"`
+	Latitude           float64                 `json:"latitude"`
+	Longitude          float64                 `json:"longitude"`
+	Address            string                  `json:"address"`
+	Postcode           string                  `json:"postcode"`
+	DistanceKm         float64                 `json:"distance_km,omitempty"`
+	VerificationStatus StoreVerificationStatus `json:"verification_status,omitempty"`
+	ReliabilityScore   int                     `json:"reliability_score,omitempty"`
+	IsConfirmedPartner bool                    `json:"is_confirmed_partner,omitempty"`
+}
+
+// StoreVerificationResult represents existence verification outcome
+type StoreVerificationResult struct {
+	StoreID             string                  `json:"store_id,omitempty"`
+	StoreName           string                  `json:"store_name"`
+	Status              StoreVerificationStatus `json:"status"`
+	ConfidenceScore     int                     `json:"confidence_score"` // 0 - 100
+	MatchedSource       string                  `json:"matched_source"`   // "NATIONAL_CHAIN", "FSA_HYGIENE", "OSM", "COMMUNITY"
+	MatchedEstablishment string                 `json:"matched_establishment,omitempty"`
+	DistanceMeters      float64                 `json:"distance_meters"`
+	IsConfirmedLocation bool                    `json:"is_confirmed_location"`
+	Warning             string                  `json:"warning,omitempty"`
+}
+
+// StoreDiscrepancyReport models user reporting a missing/closed store
+type StoreDiscrepancyReport struct {
+	StoreID       string    `json:"store_id"`
+	ReporterID    string    `json:"reporter_id"`
+	Reason        string    `json:"reason"` // "STORE_CLOSED", "NOT_HERE", "WRONG_NAME", "PRICE_MISMATCH"
+	Details       string    `json:"details,omitempty"`
+	UserLatitude  float64   `json:"user_latitude"`
+	UserLongitude float64   `json:"user_longitude"`
+	ReportedAt    time.Time `json:"reported_at"`
 }
 
 // Product represents a catalog SKU
@@ -212,4 +251,30 @@ type YellowStickerDeal struct {
 	UseByDate      string    `json:"use_by_date"`
 	ExpiresAt      time.Time `json:"expires_at"`
 }
+
+// UserSession represents an authenticated session profile
+type UserSession struct {
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	Role        string `json:"role"`
+	Token       string `json:"token"`
+	KarmaPoints int    `json:"karma_points"`
+	AuthMode    string `json:"auth_mode"` // "GOOGLE", "PHONE", "GUEST"
+}
+
+// ProductDealSummary represents a product with its best nearby supermarket deal
+type ProductDealSummary struct {
+	Product             Product               `json:"product"`
+	BestPricePence      int                   `json:"best_price_pence"`
+	BestPriceGBP        string                `json:"best_price_gbp"`
+	BestStoreName       string                `json:"best_store_name"`
+	BestStoreID         string                `json:"best_store_id"`
+	BestStoreDistanceKm float64               `json:"best_store_distance_km"`
+	ComparedStoreCount  int                   `json:"compared_store_count"`
+	FreshnessStatus     FreshnessStatus       `json:"freshness_status"`
+	Alternatives        []StorePriceComparison `json:"alternatives,omitempty"`
+}
+
 

@@ -4,20 +4,23 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.example.core.data.local.dao.CachedDealDao
 import com.example.core.data.local.dao.QueuedSubmissionDao
+import com.example.core.data.local.entity.CachedDealEntity
 import com.example.core.data.local.entity.QueuedSubmissionEntity
 
 /**
  * Main Room database for Price Bridge local cache and offline submission queue.
  */
 @Database(
-    entities = [QueuedSubmissionEntity::class],
-    version = 1,
+    entities = [QueuedSubmissionEntity::class, CachedDealEntity::class],
+    version = 2,
     exportSchema = false
 )
 abstract class PriceBridgeDatabase : RoomDatabase() {
 
     abstract fun queuedSubmissionDao(): QueuedSubmissionDao
+    abstract fun cachedDealDao(): CachedDealDao
 
     companion object {
         @Volatile

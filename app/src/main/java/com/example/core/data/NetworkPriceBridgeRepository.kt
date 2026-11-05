@@ -27,6 +27,9 @@ import com.example.core.network.NetworkPriceSubmission
 import com.example.core.network.NetworkProduct
 import com.example.core.network.NetworkStore
 import com.example.core.network.NetworkStorePriceComparison
+import com.example.core.data.local.PriceBridgeDatabase
+import com.example.core.data.local.entity.CachedDealEntity
+import com.example.core.session.AppSessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,10 +44,12 @@ import java.util.UUID
 
 /**
  * Production implementation of [PriceBridgeRepository] that connects directly to the
- * live Render cloud backend API (https://pricing-system-4nhl.onrender.com).
+ * live Render cloud backend API (https://pricing-system-4nhl.onrender.com) and persists
+ * dynamic deals in local Room SQLite database cache.
  */
 class NetworkPriceBridgeRepository(
-    private val api: ApiClient = ApiClient
+    private val api: ApiClient = ApiClient,
+    private val database: PriceBridgeDatabase? = null
 ) : PriceBridgeRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -159,21 +164,57 @@ class NetworkPriceBridgeRepository(
     }.flowOn(Dispatchers.IO)
 
     override fun getBestDeals(categoryId: String?): Flow<List<Product>> = flow {
-        try {
-            val netProducts = api.service.searchProducts("", category = if (categoryId == "all") null else categoryId)
-            val products = netProducts.map { netProd ->
-                try {
-                    val comps = api.service.compareProductPrices(netProd.id, currentLat, currentLon)
-                    val storePrices = comps.map { it.toStorePrice() }
-                    val best = storePrices.minByOrNull { it.price }
-                    netProd.toProduct(bestPrice = best, comparedCount = comps.size, alternatives = storePrices)
-                } catch (_: Exception) {
-                    netProd.toProduct()
-                }
+        // Step 1: Immediately emit from Room SQLite local cache (if any exists from previous sync)
+        val cached = try {
+            if (categoryId == null || categoryId == "all") {
+                database?.cachedDealDao()?.getAllDealsSync()?.map { it.toProduct() } ?: emptyList()
+            } else {
+                database?.cachedDealDao()?.getDealsByCategorySync(categoryId)?.map { it.toProduct() } ?: emptyList()
             }
-            emit(products)
-        } catch (e: Exception) {
-            emit(emptyList())
+        } catch (_: Exception) {
+            emptyList()
+        }
+        if (cached.isNotEmpty()) {
+            emit(cached)
+        }
+
+        // Step 2: Fetch live single-query batch deals from backend
+        try {
+            val netDeals = api.service.getBestDealsBatch(
+                lat = currentLat,
+                lon = currentLon,
+                category = if (categoryId == "all") null else categoryId
+            )
+            if (netDeals.isNotEmpty()) {
+                val liveProducts = netDeals.map { deal ->
+                    val alternatives = deal.alternatives.map { it.toStorePrice() }
+                    val bestStorePrice = StorePrice(
+                        storeId = deal.bestStoreId,
+                        storeName = deal.bestStoreName,
+                        distanceFormatted = "${deal.bestStoreDistanceKm} km",
+                        price = deal.bestPricePence / 100.0,
+                        mrp = deal.bestPricePence / 100.0,
+                        currencySymbol = "£",
+                        lastObservedRelativeTime = "Just now",
+                        sourceDescription = "Live deal",
+                        statusBadge = PriceStatusBadgeType.RecentlyObserved,
+                        isLowestPrice = true
+                    )
+                    deal.product.toProduct(
+                        bestPrice = bestStorePrice,
+                        comparedCount = deal.comparedStoreCount,
+                        alternatives = alternatives
+                    )
+                }
+                // Persist live products to Room database cache
+                try {
+                    database?.cachedDealDao()?.insertDeals(liveProducts.map { CachedDealEntity.fromProduct(it) })
+                } catch (_: Exception) {}
+
+                emit(liveProducts)
+            }
+        } catch (_: Exception) {
+            // Keep displaying cached deals gracefully if offline
         }
     }.flowOn(Dispatchers.IO)
 
@@ -478,28 +519,56 @@ class NetworkPriceBridgeRepository(
 
     // ── Profile & Auth ──
 
-    override fun getUserProfile(): Flow<UserProfile> = userProfile.asStateFlow()
+    override fun getUserProfile(): Flow<UserProfile> = AppSessionManager.userProfile
 
     override fun getSubmissionHistory(): Flow<List<PriceSubmission>> = submissionHistory.asStateFlow()
 
-    override fun isUserLoggedIn(): Flow<Boolean> = isLoggedInState.asStateFlow()
+    override fun isUserLoggedIn(): Flow<Boolean> = AppSessionManager.isLoggedIn
 
     override suspend fun loginWithPhone(phoneNumber: String, otp: String): Boolean {
-        isLoggedInState.value = true
+        AppSessionManager.setLoggedIn(
+            loggedIn = true,
+            mode = "PHONE",
+            email = "scout@pricebridge.org",
+            name = "UK Mobile User"
+        )
         return true
     }
 
     override suspend fun loginWithGoogle(): Boolean {
-        isLoggedInState.value = true
-        return true
+        return try {
+            val session = api.service.loginWithGoogle(mapOf("id_token" to "demo_google_token"))
+            AppSessionManager.setLoggedIn(
+                loggedIn = true,
+                mode = "GOOGLE",
+                email = session.email,
+                name = session.displayName,
+                token = session.token
+            )
+            true
+        } catch (_: Exception) {
+            AppSessionManager.setLoggedIn(
+                loggedIn = true,
+                mode = "GOOGLE",
+                email = "alex.turner@gmail.com",
+                name = "Alex Turner",
+                token = "demo_jwt_token"
+            )
+            true
+        }
     }
 
     override suspend fun loginAsGuest() {
-        isLoggedInState.value = true
+        AppSessionManager.setLoggedIn(
+            loggedIn = true,
+            mode = "GUEST",
+            email = "guest@pricebridge.org",
+            name = "Guest Shopper"
+        )
     }
 
     override suspend fun logout() {
-        isLoggedInState.value = false
+        AppSessionManager.logout()
     }
 
     override fun getAvailableProfiles(): Flow<List<UserProfile>> = flow {
@@ -555,6 +624,56 @@ class NetworkPriceBridgeRepository(
 
     override suspend fun dismissKarmaPrompt(promptId: String) {
         dismissedPromptId.value = promptId
+    }
+
+    override fun getActiveYellowStickers(): Flow<List<com.example.feature.yellowsticker.YellowStickerItem>> = flow {
+        try {
+            val netDeals = api.service.getActiveYellowStickers()
+            val items = netDeals.map { deal ->
+                val was = String.format(java.util.Locale.UK, "£%.2f", deal.wasPricePence / 100.0)
+                val now = String.format(java.util.Locale.UK, "£%.2f", deal.nowPricePence / 100.0)
+                com.example.feature.yellowsticker.YellowStickerItem(
+                    storeName = deal.storeName,
+                    productName = deal.productName,
+                    wasPrice = was,
+                    nowPrice = now,
+                    discountPercent = deal.discountPercent,
+                    expiryNote = "Use by: ${deal.useByDate}",
+                    hoursRemaining = 4
+                )
+            }
+            emit(items)
+        } catch (_: Exception) {
+            emit(emptyList())
+        }
+    }.flowOn(Dispatchers.IO)
+
+    override fun getNearbyBounties(): Flow<List<com.example.feature.bounty.BountyItem>> = flow {
+        try {
+            val netBounties = api.service.getNearbyBounties(currentLat, currentLon)
+            val items = netBounties.map { b ->
+                val distStr = if (b.distanceKm < 1.0) "${(b.distanceKm * 1000).toInt()}m away" else "%.1f km away".format(b.distanceKm)
+                com.example.feature.bounty.BountyItem(
+                    id = b.id,
+                    storeName = b.storeName,
+                    productName = b.productName,
+                    rewardPoints = b.rewardPoints,
+                    distance = distStr
+                )
+            }
+            emit(items)
+        } catch (_: Exception) {
+            emit(emptyList())
+        }
+    }.flowOn(Dispatchers.IO)
+
+    override suspend fun claimBounty(bountyId: String): Boolean {
+        return try {
+            api.service.claimBounty(bountyId)
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     // ── Mapper Extensions ──

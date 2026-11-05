@@ -33,16 +33,25 @@ func NewRouter(h *APIHandler) *chi.Mux {
 		// Stores
 		r.Route("/stores", func(r chi.Router) {
 			r.Get("/nearby", h.GetNearbyStores)
+			r.Get("/verify", h.VerifyStore)
+			r.Post("/verify", h.VerifyStore)
 			r.Get("/{id}", h.GetStoreByID)
+			r.Post("/{id}/report-discrepancy", h.ReportStoreDiscrepancy)
 		})
 
 		// Products & Barcodes
 		r.Route("/products", func(r chi.Router) {
+			r.Get("/deals", h.GetBestDealsBatch)
 			r.Get("/search", h.SearchProducts)
 			r.Get("/barcode/{ean}", h.GetProductByBarcode)
 			r.Get("/{id}", h.GetProductByID)
 			r.Get("/{id}/compare", h.CompareProductPrices)
 			r.Get("/{id}/trolley-whisper", h.GetTrolleyWhisper)
+		})
+
+		// Authentication (Google & Phone)
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/google", h.GoogleAuth)
 		})
 
 		// Price Submissions & Outbox

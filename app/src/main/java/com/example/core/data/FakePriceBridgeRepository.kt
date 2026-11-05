@@ -1338,5 +1338,11 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
             karmaPromptState.value = null
         }
     }
+
+    override fun getActiveYellowStickers(): Flow<List<com.example.feature.yellowsticker.YellowStickerItem>> = kotlinx.coroutines.flow.flowOf(emptyList())
+
+    override fun getNearbyBounties(): Flow<List<com.example.feature.bounty.BountyItem>> = kotlinx.coroutines.flow.flowOf(emptyList())
+
+    override suspend fun claimBounty(bountyId: String): Boolean = true
 }
 

@@ -633,11 +633,12 @@ private fun LocationSelectionSheetContent(
     var selectedRadius by remember { mutableStateOf(1.5) }
 
     val locations = listOf(
-        NeighborhoodOption("Indiranagar, 100ft Rd", "East Bangalore", 18),
-        NeighborhoodOption("Koramangala, 80ft Rd", "South-East Zone", 24),
-        NeighborhoodOption("HSR Layout, Sector 1", "South Bangalore", 15),
-        NeighborhoodOption("Jayanagar, 4th Block", "Central South", 21),
-        NeighborhoodOption("Whitefield, Main Rd", "IT Corridor Zone", 16)
+        NeighborhoodOption("Camden Town (NW1)", "North London", 12),
+        NeighborhoodOption("Covent Garden / Soho (WC2)", "Central London", 15),
+        NeighborhoodOption("Angel & Islington (N1)", "Inner North", 11),
+        NeighborhoodOption("Shoreditch & Hackney (E1)", "East London", 14),
+        NeighborhoodOption("Brixton & Lambeth (SW9)", "South London", 10),
+        NeighborhoodOption("Kensington & Chelsea (SW7)", "West London", 13)
     )
 
     val radii = listOf(1.0, 1.5, 3.0, 5.0)
@@ -961,40 +962,41 @@ fun NearbyStoreCard(
 // PREVIEWS
 // -------------------------------------------------------------
 
-private val sampleProduct = Product(
-    id = "fortune_oil_sample",
-    name = "Fortune Sunlite Sunflower Oil",
-    categoryId = "groceries",
-    quantityDescription = "1L Pouch",
-    packageSizeBadge = "1L",
+private val previewProduct = Product(
+    id = "preview_milk",
+    name = "British Semi-Skimmed Milk 4 Pints",
+    categoryId = "Dairy & Chilled",
+    quantityDescription = "Store Brand · 2.27L",
+    packageSizeBadge = "4 Pints",
     imageUrl = "",
     bestStorePrice = StorePrice(
-        storeId = "nilgiris",
-        storeName = "Nilgiris Supermarket",
-        distanceFormatted = "0.6 km",
-        price = 142.0,
-        mrp = 165.0,
+        storeId = "store_aldi_camden",
+        storeName = "Aldi Camden High St",
+        distanceFormatted = "450m · 5m walk",
+        price = 1.45,
+        mrp = 1.65,
+        currencySymbol = "£",
         lastObservedRelativeTime = "2h ago",
-        sourceDescription = "Community corroborated",
-        statusBadge = PriceStatusBadgeType.CommunityCorroborated,
+        sourceDescription = "Community verified",
+        statusBadge = PriceStatusBadgeType.RecentlyObserved,
         hasPhotoVerification = true,
         isLowestPrice = true
     ),
-    storesComparedCount = 4
+    storesComparedCount = 6
 )
 
-private val sampleBasket = SmartBasketSummary(
-    estimatedSavingsAmount = 148.0,
+private val previewBasket = SmartBasketSummary(
+    estimatedSavingsAmount = 4.20,
     storesComparedCount = 6,
-    storeNamesSample = listOf("Nilgiris", "Reliance", "Kiranas"),
+    storeNamesSample = listOf("Aldi", "Lidl", "Tesco"),
     basketItemCount = 4,
-    basketName = "Weekend Basket"
+    basketName = "Weekly Essentials"
 )
 
-private val sampleCategories = listOf(
+private val previewCategories = listOf(
     Category("all", "All"),
-    Category("groceries", "Groceries & Staples"),
-    Category("dairy", "Dairy & Eggs")
+    Category("Dairy & Chilled", "Dairy & Chilled"),
+    Category("Bakery", "Bakery")
 )
 
 @Preview(name = "Home - Content Light", showBackground = true)
@@ -1003,10 +1005,10 @@ fun HomeContentPreview() {
     PriceBridgeTheme(darkTheme = false) {
         HomeContent(
             uiState = HomeUiState(
-                basketSummary = sampleBasket,
-                categories = sampleCategories,
-                deals = listOf(sampleProduct),
-                karmaPrompt = KarmaVerificationPrompt("p1", "Reliance Smart", "Verify shelf tag photo.")
+                basketSummary = previewBasket,
+                categories = previewCategories,
+                deals = listOf(previewProduct),
+                karmaPrompt = KarmaVerificationPrompt("p1", "Aldi Camden", "Verify shelf tag photo.")
             ),
             onEvent = {}
         )
@@ -1053,9 +1055,9 @@ fun HomeOfflinePreview() {
         HomeContent(
             uiState = HomeUiState(
                 isOffline = true,
-                basketSummary = sampleBasket,
-                categories = sampleCategories,
-                deals = listOf(sampleProduct)
+                basketSummary = previewBasket,
+                categories = previewCategories,
+                deals = listOf(previewProduct)
             ),
             onEvent = {}
         )
@@ -1068,10 +1070,10 @@ fun HomeDarkModePreview() {
     PriceBridgeTheme(darkTheme = true) {
         HomeContent(
             uiState = HomeUiState(
-                basketSummary = sampleBasket,
-                categories = sampleCategories,
-                deals = listOf(sampleProduct),
-                karmaPrompt = KarmaVerificationPrompt("p1", "Reliance Smart", "Verify shelf tag photo.")
+                basketSummary = previewBasket,
+                categories = previewCategories,
+                deals = listOf(previewProduct),
+                karmaPrompt = KarmaVerificationPrompt("p1", "Aldi Camden", "Verify shelf tag photo.")
             ),
             onEvent = {}
         )

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -12,25 +13,61 @@ import (
 	"pricebridge/backend/internal/repository"
 )
 
+type spatialCacheEntry struct {
+	comparisons []domain.StorePriceComparison
+	expiresAt   time.Time
+}
+
 type CompareService struct {
-	storeRepo repository.StoreRepository
-	priceRepo repository.PriceRepository
+	storeRepo    repository.StoreRepository
+	priceRepo    repository.PriceRepository
 	requestGroup singleflight.Group
+	cacheMu      sync.RWMutex
+	cache        map[string]spatialCacheEntry
 }
 
 func NewCompareService(storeRepo repository.StoreRepository, priceRepo repository.PriceRepository) *CompareService {
 	return &CompareService{
 		storeRepo: storeRepo,
 		priceRepo: priceRepo,
+		cache:     make(map[string]spatialCacheEntry),
 	}
 }
 
-// CompareProductAcrossStores fetches and ranks prices across nearby stores for a product, protected by singleflight deduplication
+// CompareProductAcrossStores fetches and ranks prices across nearby stores for a product,
+// protected by spatial geohash caching and singleflight request coalescing to prevent thundering herd.
 func (s *CompareService) CompareProductAcrossStores(ctx context.Context, productID string, userLat, userLon, radiusKm float64, userLoyaltySchemes map[domain.LoyaltyScheme]bool) ([]domain.StorePriceComparison, error) {
-	key := fmt.Sprintf("%s:%.3f:%.3f:%.1f", productID, userLat, userLon, radiusKm)
-	res, err, _ := s.requestGroup.Do(key, func() (interface{}, error) {
-		return s.computeComparison(ctx, productID, userLat, userLon, radiusKm, userLoyaltySchemes)
+	// Quantize coordinates to ~1.1km grid cells (2 decimal places) for spatial cache sharing
+	quantLat := math.Round(userLat*100) / 100
+	quantLon := math.Round(userLon*100) / 100
+	cacheKey := fmt.Sprintf("geo:%.2f:%.2f:prod:%s:r:%.1f", quantLat, quantLon, productID, radiusKm)
+
+	// 1. Fast path: check in-memory spatial cache
+	s.cacheMu.RLock()
+	if entry, found := s.cache[cacheKey]; found && time.Now().Before(entry.expiresAt) {
+		s.cacheMu.RUnlock()
+		return entry.comparisons, nil
+	}
+	s.cacheMu.RUnlock()
+
+	// 2. Request coalescing via singleflight
+	res, err, _ := s.requestGroup.Do(cacheKey, func() (interface{}, error) {
+		comps, err := s.computeComparison(ctx, productID, userLat, userLon, radiusKm, userLoyaltySchemes)
+		if err != nil {
+			return nil, err
+		}
+
+		// Save to spatial cache with 5-minute TTL
+		s.cacheMu.Lock()
+		s.cache[cacheKey] = spatialCacheEntry{
+			comparisons: comps,
+			expiresAt:   time.Now().Add(5 * time.Minute),
+		}
+		s.cacheMu.Unlock()
+
+		return comps, nil
 	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -121,4 +158,3 @@ func timeAgo(t time.Time) string {
 	days := int(diff.Hours() / 24)
 	return fmt.Sprintf("%d days ago", days)
 }
-

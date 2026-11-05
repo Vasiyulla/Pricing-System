@@ -66,11 +66,12 @@ func main() {
 	optimizerSvc := service.NewOptimizerService(storeRepo, priceRepo)
 	trolleySvc := service.NewTrolleyService(storeRepo, prodRepo, priceRepo)
 	aiSvc := service.NewAIService()
+	storeVerifier := service.NewStoreVerifier(storeRepo)
 
 	// 3. Initialize API Handler & Chi Router
 	handler := api.NewAPIHandler(
 		storeRepo, prodRepo, priceRepo, bountyRepo, stickerRepo, categoryRepo,
-		compareSvc, optimizerSvc, trolleySvc, aiSvc,
+		compareSvc, optimizerSvc, trolleySvc, aiSvc, storeVerifier,
 	)
 	router := api.NewRouter(handler)
 

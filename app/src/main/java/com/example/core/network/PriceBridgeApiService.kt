@@ -82,5 +82,17 @@ interface PriceBridgeApiService {
 
     @POST("api/v1/ai/yellow-sticker-scan")
     suspend fun scanYellowStickerAI(@Body payload: Map<String, String>): NetworkYellowStickerDeal
+
+    @GET("api/v1/products/deals")
+    suspend fun getBestDealsBatch(
+        @Query("lat") lat: Double,
+        @Query("lon") lon: Double,
+        @Query("category") category: String? = null
+    ): List<NetworkProductDealSummary>
+
+    @POST("api/v1/auth/google")
+    suspend fun loginWithGoogle(
+        @Body payload: Map<String, String>
+    ): NetworkUserSession
 }
 
