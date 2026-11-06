@@ -57,7 +57,8 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
             Category(id = "dairy", name = "Dairy & Eggs"),
             Category(id = "personal_care", name = "Personal Care"),
             Category(id = "pharmacy", name = "Pharmacy"),
-            Category(id = "snacks", name = "Snacks")
+            Category(id = "snacks", name = "Snacks"),
+            Category(id = "yellow_stickers", name = "🏷️ Yellow Stickers")
         )
     )
 
@@ -485,7 +486,7 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
 
     // ── Recent Searches ──
     private val recentSearches = MutableStateFlow(
-        listOf("Fortune Oil", "Amul Milk", "Atta 5kg", "Tata Salt", "Dettol")
+        listOf("Fortune Oil", "Amul Milk", "Atta 5kg", "🏷️ Yellow Stickers", "Tata Salt", "Dettol")
     )
 
     // ── Auth & Profiles ──
@@ -1349,5 +1350,10 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
     override fun getNearbyBounties(): Flow<List<com.example.feature.bounty.BountyItem>> = kotlinx.coroutines.flow.flowOf(emptyList())
 
     override suspend fun claimBounty(bountyId: String): Boolean = true
+
+    override suspend fun clearAllData(wipeServerDb: Boolean): Boolean {
+        isLoggedInState.value = false
+        return true
+    }
 }
 

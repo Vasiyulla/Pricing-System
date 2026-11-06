@@ -30,13 +30,9 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.Savings
-import androidx.compose.material.icons.filled.LocalOffer
-import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3Api 
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -79,8 +75,6 @@ import com.example.core.ui.BottomBarDestination
 import com.example.core.ui.CategoryPillStrip
 import com.example.core.ui.EmptyStateView
 import com.example.core.ui.ErrorStateView
-import com.example.core.ui.HeroSavingsCard
-import com.example.core.ui.KarmaContributionCard
 import com.example.core.ui.LoadingStateView
 import com.example.core.ui.OfflineBanner
 import com.example.core.ui.PriceBridgeBottomBar
@@ -296,123 +290,18 @@ fun HomeContent(
                             }
                         }
 
-                        // "What are you purchasing today?" Reactive Shopping Intent Hero
-                        item(key = "shopping_intent_hero") {
-                            Box(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
-                                ShoppingIntentHero(
-                                    onNavigateToTwoStopBasket = onNavigateToTwoStopBasket,
-                                    onNavigateToYellowStickers = onNavigateToYellowStickers,
-                                    onNavigateToSearch = { _ ->
-                                        onEvent(HomeUiEvent.OnSearchClicked)
-                                    }
-                                )
-                            }
-                        }
-
-                        // Hero Savings Card (Smart Basket Optimization)
-                        uiState.basketSummary?.let { basket ->
-                            item(key = "hero_savings_card") {
-                                Box(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
-                                    HeroSavingsCard(
-                                        basketSummary = basket,
-                                        onViewBasketClick = { onEvent(HomeUiEvent.OnViewBasketClicked) }
-                                    )
-                                }
-                            }
-                        }
-
-                        // ── AI Superpowers Quick Access Strip ──
-                        item(key = "ai_superpowers_strip") {
-                            Column(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
-                                Text(
-                                    text = "AI Smart Tools",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    item {
-                                        Surface(
-                                            onClick = onNavigateToTrolleyEar,
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = Color(0xFFE8F5E9),
-                                            border = BorderStroke(1.dp, Color(0xFF81C784))
-                                        ) {
-                                            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.Headphones, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
-                                                Spacer(Modifier.width(8.dp))
-                                                Column {
-                                                    Text("Trolley Ear", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF1B5E20))
-                                                    Text("In-Store Audio", fontSize = 11.sp, color = Color(0xFF2E7D32))
-                                                }
-                                            }
-                                        }
-                                    }
-                                    item {
-                                        Surface(
-                                            onClick = onNavigateToTwoStopBasket,
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = Color(0xFFE3F2FD),
-                                            border = BorderStroke(1.dp, Color(0xFF90CAF9))
-                                        ) {
-                                            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.Savings, contentDescription = null, tint = Color(0xFF1565C0), modifier = Modifier.size(20.dp))
-                                                Spacer(Modifier.width(8.dp))
-                                                Column {
-                                                    Text("2-Stop Split", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0D47A1))
-                                                    Text("Pareto Basket", fontSize = 11.sp, color = Color(0xFF1565C0))
-                                                }
-                                            }
-                                        }
-                                    }
-                                    item {
-                                        Surface(
-                                            onClick = onNavigateToYellowStickers,
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = Color(0xFFFFF9C4),
-                                            border = BorderStroke(1.dp, Color(0xFFFFF176))
-                                        ) {
-                                            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.LocalOffer, contentDescription = null, tint = Color(0xFFE65100), modifier = Modifier.size(20.dp))
-                                                Spacer(Modifier.width(8.dp))
-                                                Column {
-                                                    Text("Yellow Stickers", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFBF360C))
-                                                    Text("Clearance Deals", fontSize = 11.sp, color = Color(0xFFE65100))
-                                                }
-                                            }
-                                        }
-                                    }
-                                    item {
-                                        Surface(
-                                            onClick = onNavigateToBounties,
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = Color(0xFFF3E5F5),
-                                            border = BorderStroke(1.dp, Color(0xFFCE93D8))
-                                        ) {
-                                            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.MilitaryTech, contentDescription = null, tint = Color(0xFF6A1B9A), modifier = Modifier.size(20.dp))
-                                                Spacer(Modifier.width(8.dp))
-                                                Column {
-                                                    Text("AI Bounties", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF4A148C))
-                                                    Text("Earn Points", fontSize = 11.sp, color = Color(0xFF6A1B9A))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Categories Horizontal Filter Strip
+                        // Categories Horizontal Filter Strip (immediately below search)
                         if (uiState.categories.isNotEmpty()) {
                             item(key = "categories_strip") {
                                 CategoryPillStrip(
                                     categories = uiState.categories,
                                     selectedCategoryId = uiState.selectedCategoryId,
                                     onCategorySelect = { categoryId ->
-                                        onEvent(HomeUiEvent.OnCategorySelected(categoryId))
+                                        if (categoryId == "yellow_stickers" || categoryId == "clearance") {
+                                            onNavigateToYellowStickers()
+                                        } else {
+                                            onEvent(HomeUiEvent.OnCategorySelected(categoryId))
+                                        }
                                     }
                                 )
                             }
@@ -542,19 +431,6 @@ fun HomeContent(
                                     onProductClick = { onEvent(HomeUiEvent.OnProductClicked(it)) },
                                     onCompareStoresClick = { onEvent(HomeUiEvent.OnCompareStoresClicked(it)) }
                                 )
-                            }
-                        }
-
-                        // Section 2: Help Verify Nearby Prices (Community Karma)
-                        uiState.karmaPrompt?.let { prompt ->
-                            item(key = "karma_verification_prompt") {
-                                Box(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
-                                    KarmaContributionCard(
-                                        prompt = prompt,
-                                        onVerifyClick = { onEvent(HomeUiEvent.OnVerifyKarmaClicked(it)) },
-                                        onMaybeLaterClick = { onEvent(HomeUiEvent.OnDismissKarmaPrompt(it)) }
-                                    )
-                                }
                             }
                         }
 
@@ -690,7 +566,76 @@ private fun LocationSelectionSheetContent(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Nearby Pilot Hubs",
+                text = "Live Device Location",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.outline
+            )
+
+            val isGpsSelected = selectedLocation == "Live Device GPS" || (!selectedLocation.startsWith("Camden") && !selectedLocation.startsWith("Covent") && !selectedLocation.startsWith("Angel") && !selectedLocation.startsWith("Shoreditch") && !selectedLocation.startsWith("Brixton") && !selectedLocation.startsWith("Kensington"))
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = if (isGpsSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                border = BorderStroke(
+                    width = if (isGpsSelected) 2.dp else 1.dp,
+                    color = if (isGpsSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { selectedLocation = "Live Device GPS" }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isGpsSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NearMe,
+                            contentDescription = null,
+                            tint = if (isGpsSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "My Live GPS (Anywhere)",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Real-time GPS • Auto-discovers local stores anywhere",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (isGpsSelected) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Selected",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Preset Pilot Hubs (London)",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.outline

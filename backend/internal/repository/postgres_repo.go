@@ -84,6 +84,8 @@ func (s *PostgresStore) BountyRepo() BountyRepository               { return s.b
 func (s *PostgresStore) YellowStickerRepo() YellowStickerRepository { return s.yellowStickerRepo }
 func (s *PostgresStore) CategoryRepo() CategoryRepository           { return s.categoryRepo }
 func (s *PostgresStore) Close()                                     { s.pool.Close() }
+func (s *PostgresStore) Ping(ctx context.Context) error             { return s.pool.Ping(ctx) }
+func (s *PostgresStore) Pool() *pgxpool.Pool                        { return s.pool }
 
 func (s *PostgresStore) ExecuteRawSQL(ctx context.Context, sql string) error {
 	_, err := s.pool.Exec(ctx, sql)
@@ -153,18 +155,18 @@ func (r *pgStoreRepo) GetByID(ctx context.Context, id string) (*domain.Store, er
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, chain, format, name, address, postcode,
 		       ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon,
-		       operating_hours, phone, reliability_score, is_confirmed_partner
+		       COALESCE(operating_hours, '7:00 AM - 11:00 PM'),
+		       COALESCE(phone, ''),
+		       COALESCE(reliability_score, 95),
+		       COALESCE(is_confirmed_partner, FALSE)
 		FROM stores WHERE id = $1
 	`, id)
 
 	var st domain.Store
 	var lat, lon float64
-	var hours, phone *string
-	var relScore int
-	var partner bool
 
 	err := row.Scan(&st.ID, &st.Chain, &st.Format, &st.Name, &st.Address, &st.Postcode,
-		&lat, &lon, &hours, &phone, &relScore, &partner)
+		&lat, &lon, &st.OperatingHours, &st.Phone, &st.ReliabilityScore, &st.IsConfirmedPartner)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("store not found: %s", id)
@@ -183,7 +185,11 @@ func (r *pgStoreRepo) GetNearby(ctx context.Context, lat, lon, radiusKm float64)
 	query := `
 		SELECT id, chain, format, name, address, postcode,
 		       ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon,
-		       ROUND((ST_Distance(geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) / 1000.0)::numeric, 2) AS distance_km
+		       ROUND((ST_Distance(geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) / 1000.0)::numeric, 2) AS distance_km,
+		       COALESCE(operating_hours, '7:00 AM - 11:00 PM'),
+		       COALESCE(phone, ''),
+		       COALESCE(reliability_score, 95),
+		       COALESCE(is_confirmed_partner, FALSE)
 		FROM stores
 		WHERE ST_DWithin(geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
 		ORDER BY geom <-> ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
@@ -201,7 +207,8 @@ func (r *pgStoreRepo) GetNearby(ctx context.Context, lat, lon, radiusKm float64)
 	for rows.Next() {
 		var s domain.Store
 		if err := rows.Scan(&s.ID, &s.Chain, &s.Format, &s.Name, &s.Address, &s.Postcode,
-			&s.Latitude, &s.Longitude, &s.DistanceKm); err == nil {
+			&s.Latitude, &s.Longitude, &s.DistanceKm,
+			&s.OperatingHours, &s.Phone, &s.ReliabilityScore, &s.IsConfirmedPartner); err == nil {
 			stores = append(stores, s)
 		}
 	}
@@ -211,7 +218,11 @@ func (r *pgStoreRepo) GetNearby(ctx context.Context, lat, lon, radiusKm float64)
 func (r *pgStoreRepo) GetAll(ctx context.Context) ([]domain.Store, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, chain, format, name, address, postcode,
-		       ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon
+		       ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon,
+		       COALESCE(operating_hours, '7:00 AM - 11:00 PM'),
+		       COALESCE(phone, ''),
+		       COALESCE(reliability_score, 95),
+		       COALESCE(is_confirmed_partner, FALSE)
 		FROM stores ORDER BY name
 	`)
 	if err != nil {
@@ -223,7 +234,8 @@ func (r *pgStoreRepo) GetAll(ctx context.Context) ([]domain.Store, error) {
 	for rows.Next() {
 		var s domain.Store
 		if err := rows.Scan(&s.ID, &s.Chain, &s.Format, &s.Name, &s.Address, &s.Postcode,
-			&s.Latitude, &s.Longitude); err == nil {
+			&s.Latitude, &s.Longitude,
+			&s.OperatingHours, &s.Phone, &s.ReliabilityScore, &s.IsConfirmedPartner); err == nil {
 			stores = append(stores, s)
 		}
 	}
@@ -231,18 +243,30 @@ func (r *pgStoreRepo) GetAll(ctx context.Context) ([]domain.Store, error) {
 }
 
 func (r *pgStoreRepo) Create(ctx context.Context, store domain.Store) error {
+	hours := store.OperatingHours
+	if hours == "" {
+		hours = "7:00 AM - 11:00 PM"
+	}
+	relScore := store.ReliabilityScore
+	if relScore == 0 {
+		relScore = 95
+	}
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO stores (id, chain, format, name, address, postcode, geom)
-		VALUES ($1, $2, $3, $4, $5, $6, ST_SetSRID(ST_MakePoint($7, $8), 4326)::geography)
+		INSERT INTO stores (id, chain, format, name, address, postcode, geom, operating_hours, phone, reliability_score, is_confirmed_partner)
+		VALUES ($1, $2, $3, $4, $5, $6, ST_SetSRID(ST_MakePoint($7, $8), 4326)::geography, $9, $10, $11, $12)
 		ON CONFLICT (id) DO UPDATE SET
 			chain = EXCLUDED.chain,
 			format = EXCLUDED.format,
 			name = EXCLUDED.name,
 			address = EXCLUDED.address,
 			postcode = EXCLUDED.postcode,
-			geom = EXCLUDED.geom;
+			geom = EXCLUDED.geom,
+			operating_hours = EXCLUDED.operating_hours,
+			phone = EXCLUDED.phone,
+			reliability_score = EXCLUDED.reliability_score,
+			is_confirmed_partner = EXCLUDED.is_confirmed_partner;
 	`, store.ID, store.Chain, store.Format, store.Name, store.Address, store.Postcode,
-		store.Longitude, store.Latitude)
+		store.Longitude, store.Latitude, hours, store.Phone, relScore, store.IsConfirmedPartner)
 	return err
 }
 
@@ -416,16 +440,38 @@ func (r *pgPriceRepo) SubmitPrice(ctx context.Context, record domain.PriceRecord
 	}
 	defer tx.Rollback(ctx)
 
-	// Insert into append-only price ledger
+	var idempotencyKey *string
+	if record.IdempotencyKey != "" {
+		idempotencyKey = &record.IdempotencyKey
+	}
+
+	// Insert into append-only price ledger with ON CONFLICT (idempotency_key) DO NOTHING
 	var newID string
 	err = tx.QueryRow(ctx, `
 		INSERT INTO price_records (
 			product_id, store_id, regular_price_pence, loyalty_price_pence,
-			loyalty_scheme, effective_price_pence, source_type, freshness_status, observed_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+			loyalty_scheme, effective_price_pence, source_type, freshness_status,
+			idempotency_key, observed_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+		ON CONFLICT (idempotency_key) DO NOTHING
 		RETURNING id::text;
 	`, record.ProductID, record.StoreID, record.RegularPricePence, record.LoyaltyPricePence,
-		string(record.LoyaltyScheme), effectivePrice, record.SourceType, string(record.FreshnessStatus)).Scan(&newID)
+		string(record.LoyaltyScheme), effectivePrice, record.SourceType, string(record.FreshnessStatus),
+		idempotencyKey).Scan(&newID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			// Duplicate submission with matching idempotency key; commit transaction idempotently
+			return tx.Commit(ctx)
+		}
+		return err
+	}
+
+	// Update previous active price record within transaction to update superseded_by pointer
+	_, err = tx.Exec(ctx, `
+		UPDATE price_records
+		SET superseded_by = $1
+		WHERE product_id = $2 AND store_id = $3 AND superseded_by IS NULL AND id != $1
+	`, newID, record.ProductID, record.StoreID)
 	if err != nil {
 		return err
 	}
@@ -488,6 +534,39 @@ type pgBountyRepo struct {
 }
 
 func (r *pgBountyRepo) GetNearby(ctx context.Context, lat, lon, radiusKm float64) ([]domain.Bounty, error) {
+	radiusMeters := radiusKm * 1000.0
+
+	// PostGIS spatial query filtering by store location
+	query := `
+		SELECT b.id, b.store_id, s.name, COALESCE(b.product_id, ''), b.task_description, b.reward_points,
+		       ROUND((ST_Distance(s.geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) / 1000.0)::numeric, 2) AS distance_km
+		FROM bounties b
+		JOIN stores s ON b.store_id = s.id
+		WHERE b.is_claimed = FALSE
+		  AND ST_DWithin(s.geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
+		ORDER BY s.geom <-> ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
+		LIMIT 10;
+	`
+
+	rows, err := r.pool.Query(ctx, query, lat, lon, radiusMeters)
+	if err != nil {
+		// Fallback without PostGIS if spatial query fails
+		return r.getNearbyFallback(ctx)
+	}
+	defer rows.Close()
+
+	var bounties []domain.Bounty
+	for rows.Next() {
+		var b domain.Bounty
+		if err := rows.Scan(&b.ID, &b.StoreID, &b.StoreName, &b.ProductID, &b.ProductName, &b.RewardPoints, &b.DistanceKm); err == nil {
+			b.Status = "OPEN"
+			bounties = append(bounties, b)
+		}
+	}
+	return bounties, nil
+}
+
+func (r *pgBountyRepo) getNearbyFallback(ctx context.Context) ([]domain.Bounty, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT b.id, b.store_id, s.name, COALESCE(b.product_id, ''), b.task_description, b.reward_points
 		FROM bounties b

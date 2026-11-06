@@ -2,12 +2,16 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/singleflight"
 	"pricebridge/backend/internal/domain"
 	"pricebridge/backend/internal/repository"
@@ -21,24 +25,73 @@ type spatialCacheEntry struct {
 type CompareService struct {
 	storeRepo    repository.StoreRepository
 	priceRepo    repository.PriceRepository
+	rdb          *redis.Client
 	requestGroup singleflight.Group
 	cacheMu      sync.RWMutex
 	cache        map[string]spatialCacheEntry
 }
 
-func NewCompareService(storeRepo repository.StoreRepository, priceRepo repository.PriceRepository) *CompareService {
+func NewCompareService(storeRepo repository.StoreRepository, priceRepo repository.PriceRepository, rdb ...*redis.Client) *CompareService {
+	var redisClient *redis.Client
+	if len(rdb) > 0 {
+		redisClient = rdb[0]
+	}
 	return &CompareService{
 		storeRepo: storeRepo,
 		priceRepo: priceRepo,
+		rdb:       redisClient,
 		cache:     make(map[string]spatialCacheEntry),
 	}
 }
 
-// ClearCache clears the in-memory spatial geohash cache
-func (s *CompareService) ClearCache() {
+// SetRedis updates or initializes the Redis client instance
+func (s *CompareService) SetRedis(rdb *redis.Client) {
+	s.rdb = rdb
+}
+
+// ClearCache clears both Redis geohash cache and in-memory spatial cache
+func (s *CompareService) ClearCache(ctx ...context.Context) {
+	c := context.Background()
+	if len(ctx) > 0 && ctx[0] != nil {
+		c = ctx[0]
+	}
+
+	if s.rdb != nil {
+		iter := s.rdb.Scan(c, 0, "geo:*", 200).Iterator()
+		for iter.Next(c) {
+			_ = s.rdb.Del(c, iter.Val()).Err()
+		}
+	}
+
 	s.cacheMu.Lock()
 	defer s.cacheMu.Unlock()
 	s.cache = make(map[string]spatialCacheEntry)
+}
+
+// InvalidateProductCache invalidates cached comparison entries across Redis and in-memory for a product
+func (s *CompareService) InvalidateProductCache(ctx context.Context, productID, storeID string) error {
+	// 1. Invalidate Redis keys matching product
+	if s.rdb != nil {
+		pattern := fmt.Sprintf("*prod:%s*", productID)
+		iter := s.rdb.Scan(ctx, 0, pattern, 100).Iterator()
+		for iter.Next(ctx) {
+			_ = s.rdb.Del(ctx, iter.Val()).Err()
+		}
+		if err := iter.Err(); err != nil {
+			log.Printf("[CompareService] Warning: Redis cache invalidation error: %v", err)
+		}
+	}
+
+	// 2. Invalidate in-memory cache
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	prodMatch := fmt.Sprintf("prod:%s:", productID)
+	for k := range s.cache {
+		if strings.Contains(k, prodMatch) {
+			delete(s.cache, k)
+		}
+	}
+	return nil
 }
 
 // CompareProductAcrossStores fetches and ranks prices across nearby stores for a product,
@@ -49,7 +102,18 @@ func (s *CompareService) CompareProductAcrossStores(ctx context.Context, product
 	quantLon := math.Round(userLon*100) / 100
 	cacheKey := fmt.Sprintf("geo:%.2f:%.2f:prod:%s:r:%.1f", quantLat, quantLon, productID, radiusKm)
 
-	// 1. Fast path: check in-memory spatial cache
+	// 1. Fast path: check distributed Redis cache first
+	if s.rdb != nil {
+		val, err := s.rdb.Get(ctx, cacheKey).Result()
+		if err == nil && val != "" {
+			var cachedComps []domain.StorePriceComparison
+			if err := json.Unmarshal([]byte(val), &cachedComps); err == nil {
+				return cachedComps, nil
+			}
+		}
+	}
+
+	// 2. Check in-memory spatial cache fallback
 	s.cacheMu.RLock()
 	if entry, found := s.cache[cacheKey]; found && time.Now().Before(entry.expiresAt) {
 		s.cacheMu.RUnlock()
@@ -57,14 +121,32 @@ func (s *CompareService) CompareProductAcrossStores(ctx context.Context, product
 	}
 	s.cacheMu.RUnlock()
 
-	// 2. Request coalescing via singleflight
+	// 3. Request coalescing via singleflight to prevent cache stampedes under high concurrency
 	res, err, _ := s.requestGroup.Do(cacheKey, func() (interface{}, error) {
+		// Double check Redis inside singleflight guard in case concurrent caller filled it
+		if s.rdb != nil {
+			val, err := s.rdb.Get(ctx, cacheKey).Result()
+			if err == nil && val != "" {
+				var cachedComps []domain.StorePriceComparison
+				if err := json.Unmarshal([]byte(val), &cachedComps); err == nil {
+					return cachedComps, nil
+				}
+			}
+		}
+
 		comps, err := s.computeComparison(ctx, productID, userLat, userLon, radiusKm, userLoyaltySchemes)
 		if err != nil {
 			return nil, err
 		}
 
-		// Save to spatial cache with 5-minute TTL
+		// Save to Redis distributed cache with 300s TTL (5 minutes)
+		if s.rdb != nil {
+			if data, err := json.Marshal(comps); err == nil {
+				_ = s.rdb.Set(ctx, cacheKey, data, 300*time.Second).Err()
+			}
+		}
+
+		// Save to in-memory spatial cache with 5-minute TTL
 		s.cacheMu.Lock()
 		s.cache[cacheKey] = spatialCacheEntry{
 			comparisons: comps,

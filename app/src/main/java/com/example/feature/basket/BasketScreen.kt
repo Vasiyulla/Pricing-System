@@ -120,6 +120,7 @@ fun BasketScreen(
     onNavigateToSearch: () -> Unit,
     onNavigateToScan: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToTwoStopBasket: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: BasketViewModel = viewModel()
 ) {
@@ -144,6 +145,7 @@ fun BasketScreen(
                 else -> viewModel.onEvent(event)
             }
         },
+        onNavigateToTwoStopBasket = onNavigateToTwoStopBasket,
         modifier = modifier
     )
 }
@@ -156,6 +158,7 @@ fun BasketScreen(
 fun BasketContent(
     uiState: BasketUiState,
     onEvent: (BasketUiEvent) -> Unit,
+    onNavigateToTwoStopBasket: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -420,7 +423,8 @@ fun BasketContent(
                                 RecommendationSelectorCard(
                                     basket = basket,
                                     selectedIndex = uiState.selectedRecommendationIndex,
-                                    onSelectIndex = { onEvent(BasketUiEvent.OnSelectRecommendation(it)) }
+                                    onSelectIndex = { onEvent(BasketUiEvent.OnSelectRecommendation(it)) },
+                                    onNavigateToTwoStopBasket = onNavigateToTwoStopBasket
                                 )
                             }
                         }
@@ -429,13 +433,30 @@ fun BasketContent(
                         if (basket.storeSplits.isNotEmpty()) {
                             item(key = "store_splits_segment") {
                                 Column(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
-                                    Text(
-                                        text = stringResource(R.string.section_store_splits),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.padding(bottom = 6.dp)
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.section_store_splits),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.padding(bottom = 6.dp)
+                                        )
+                                        TextButton(
+                                            onClick = onNavigateToTwoStopBasket,
+                                            modifier = Modifier.testTag("btn_open_two_stop_optimizer")
+                                        ) {
+                                            Text(
+                                                text = "2-Stop Optimizer →",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
                                     StoreSplitsRow(splits = basket.storeSplits)
                                 }
                             }
@@ -650,6 +671,7 @@ private fun RecommendationSelectorCard(
     basket: ShoppingBasket,
     selectedIndex: Int,
     onSelectIndex: (Int) -> Unit,
+    onNavigateToTwoStopBasket: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -712,6 +734,23 @@ private fun RecommendationSelectorCard(
                         isSelected = selectedIndex == 1,
                         onClick = { onSelectIndex(1) },
                         modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            if (selectedIndex == 0 && basket.twoStoreRecommendation != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onNavigateToTwoStopBasket,
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("btn_view_two_stop_optimizer_detail")
+                ) {
+                    Text(
+                        text = "View 2-Stop Pareto Optimization Map",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }

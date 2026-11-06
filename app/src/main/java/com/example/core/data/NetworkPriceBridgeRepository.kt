@@ -1,6 +1,13 @@
 package com.example.core.data
 
+import android.content.Context
+import com.example.core.data.local.PriceBridgeDatabase
+import com.example.core.data.local.entity.CachedCategoryEntity
+import com.example.core.data.local.entity.CachedDealEntity
+import com.example.core.data.local.entity.CachedProductEntity
+import com.example.core.data.local.entity.CachedStoreEntity
 import com.example.core.data.local.entity.QueuedSubmissionEntity
+import com.example.core.data.offline.PriceSyncWorker
 import com.example.core.model.AppNotification
 import com.example.core.model.Category
 import com.example.core.model.GoogleTaskItem
@@ -27,8 +34,6 @@ import com.example.core.network.NetworkPriceSubmission
 import com.example.core.network.NetworkProduct
 import com.example.core.network.NetworkStore
 import com.example.core.network.NetworkStorePriceComparison
-import com.example.core.data.local.PriceBridgeDatabase
-import com.example.core.data.local.entity.CachedDealEntity
 import com.example.core.session.AppSessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,11 +50,12 @@ import java.util.UUID
 /**
  * Production implementation of [PriceBridgeRepository] that connects directly to the
  * live Render cloud backend API (https://pricing-system-4nhl.onrender.com) and persists
- * dynamic deals in local Room SQLite database cache.
+ * dynamic deals, products, and stores in local Room SQLite database cache.
  */
 class NetworkPriceBridgeRepository(
     private val api: ApiClient = ApiClient,
-    private val database: PriceBridgeDatabase? = null
+    private val database: PriceBridgeDatabase? = null,
+    private val context: Context? = null
 ) : PriceBridgeRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -131,15 +137,34 @@ class NetworkPriceBridgeRepository(
     override fun getSmartBasketSummary(): Flow<SmartBasketSummary> = basketSummary.asStateFlow()
 
     override fun getCategories(): Flow<List<Category>> = flow {
+        // Step 1: Immediately emit cached categories from Room if available
+        val cached = try {
+            database?.cachedCategoryDao()?.getAllCategories()
+        } catch (_: Exception) {
+            null
+        }
+        if (!cached.isNullOrEmpty()) {
+            emit(cached.map { it.toCategory() })
+        }
+
+        // Step 2: Fetch fresh categories from backend and update cache
         try {
             val netCats = api.service.getCategories()
             if (netCats.isNotEmpty()) {
-                emit(netCats.map { Category(id = it.id, name = it.name) })
-            } else {
+                val categories = netCats.map { Category(id = it.id, name = it.name) }
+                try {
+                    database?.cachedCategoryDao()?.insertCategories(
+                        netCats.map { CachedCategoryEntity(id = it.id, name = it.name) }
+                    )
+                } catch (_: Exception) {}
+                emit(categories)
+            } else if (cached.isNullOrEmpty()) {
                 emit(listOf(Category(id = "all", name = "All")))
             }
         } catch (_: Exception) {
-            emit(listOf(Category(id = "all", name = "All")))
+            if (cached.isNullOrEmpty()) {
+                emit(listOf(Category(id = "all", name = "All")))
+            }
         }
     }.flowOn(Dispatchers.IO)
 
@@ -221,10 +246,11 @@ class NetworkPriceBridgeRepository(
     // ── Search & Barcode ──
 
     override fun searchProducts(query: String, categoryId: String?): Flow<List<Product>> = flow {
+        val actualCategory = if (categoryId == "all" || categoryId.isNullOrEmpty()) null else categoryId
         try {
             val netProducts = api.service.searchProducts(
                 query = query,
-                category = if (categoryId == "all" || categoryId.isNullOrEmpty()) null else categoryId
+                category = actualCategory
             )
             val products = netProducts.map { netProd ->
                 try {
@@ -236,9 +262,49 @@ class NetworkPriceBridgeRepository(
                     netProd.toProduct()
                 }
             }
+
+            // Persist to Room cache
+            try {
+                database?.cachedProductDao()?.insertProducts(
+                    products.map { CachedProductEntity.fromProduct(it) }
+                )
+            } catch (_: Exception) {}
+
             emit(products)
         } catch (e: Exception) {
-            emit(emptyList())
+            // Offline fallback: Query Room cache
+            val cached = try {
+                if (actualCategory != null) {
+                    database?.cachedProductDao()?.searchProductsByCategory(query, actualCategory)
+                } else if (query.isNotBlank()) {
+                    database?.cachedProductDao()?.searchProducts(query)
+                } else {
+                    database?.cachedProductDao()?.getAllProducts()
+                }
+            } catch (_: Exception) {
+                null
+            } ?: emptyList()
+
+            if (cached.isNotEmpty()) {
+                emit(cached.map { it.toProduct() })
+            } else {
+                val cachedDeals = try {
+                    if (actualCategory != null) {
+                        database?.cachedDealDao()?.getDealsByCategorySync(actualCategory)
+                    } else {
+                        database?.cachedDealDao()?.getAllDealsSync()
+                    }
+                } catch (_: Exception) {
+                    null
+                } ?: emptyList()
+
+                val filteredDeals = if (query.isNotBlank()) {
+                    cachedDeals.filter { it.name.contains(query, ignoreCase = true) }
+                } else {
+                    cachedDeals
+                }
+                emit(filteredDeals.map { it.toProduct() })
+            }
         }
     }.flowOn(Dispatchers.IO)
 
@@ -248,9 +314,18 @@ class NetworkPriceBridgeRepository(
             val comps = api.service.compareProductPrices(netProd.id, currentLat, currentLon)
             val storePrices = comps.map { it.toStorePrice() }
             val best = storePrices.minByOrNull { it.price }
-            emit(netProd.toProduct(bestPrice = best, comparedCount = comps.size, alternatives = storePrices))
+            val product = netProd.toProduct(bestPrice = best, comparedCount = comps.size, alternatives = storePrices)
+            try {
+                database?.cachedProductDao()?.insertProduct(CachedProductEntity.fromProduct(product))
+            } catch (_: Exception) {}
+            emit(product)
         } catch (e: Exception) {
-            emit(null)
+            val cached = try {
+                database?.cachedProductDao()?.getProductByBarcode(barcode)
+            } catch (_: Exception) {
+                null
+            }
+            emit(cached?.toProduct())
         }
     }.flowOn(Dispatchers.IO)
 
@@ -271,9 +346,27 @@ class NetworkPriceBridgeRepository(
             val comps = api.service.compareProductPrices(productId, currentLat, currentLon)
             val storePrices = comps.map { it.toStorePrice() }
             val best = storePrices.minByOrNull { it.price }
-            emit(netProd.toProduct(bestPrice = best, comparedCount = comps.size, alternatives = storePrices))
+            val product = netProd.toProduct(bestPrice = best, comparedCount = comps.size, alternatives = storePrices)
+            try {
+                database?.cachedProductDao()?.insertProduct(CachedProductEntity.fromProduct(product))
+            } catch (_: Exception) {}
+            emit(product)
         } catch (e: Exception) {
-            emit(null)
+            val cached = try {
+                database?.cachedProductDao()?.getProductById(productId)
+            } catch (_: Exception) {
+                null
+            }
+            if (cached != null) {
+                emit(cached.toProduct())
+            } else {
+                val deal = try {
+                    database?.cachedDealDao()?.getAllDealsSync()?.find { it.id == productId }
+                } catch (_: Exception) {
+                    null
+                }
+                emit(deal?.toProduct())
+            }
         }
     }.flowOn(Dispatchers.IO)
 
@@ -303,27 +396,68 @@ class NetworkPriceBridgeRepository(
     override fun getNearbyStores(): Flow<List<Store>> = flow {
         try {
             val netStores = api.service.getNearbyStores(lat = currentLat, lon = currentLon, radiusKm = 10.0)
-            emit(netStores.map { it.toStore() })
+            val stores = netStores.map { it.toStore() }
+            try {
+                database?.cachedStoreDao()?.insertStores(
+                    stores.map { CachedStoreEntity.fromStore(it) }
+                )
+            } catch (_: Exception) {}
+            emit(stores)
         } catch (e: Exception) {
-            emit(emptyList())
+            val cached = try {
+                database?.cachedStoreDao()?.getAllStores()
+            } catch (_: Exception) {
+                null
+            } ?: emptyList()
+            emit(cached.map { it.toStore() })
         }
     }.flowOn(Dispatchers.IO)
 
     override fun getAllProducts(): Flow<List<Product>> = flow {
         try {
             val netProducts = api.service.searchProducts("")
-            emit(netProducts.map { it.toProduct() })
+            val products = netProducts.map { it.toProduct() }
+            try {
+                database?.cachedProductDao()?.insertProducts(
+                    products.map { CachedProductEntity.fromProduct(it) }
+                )
+            } catch (_: Exception) {}
+            emit(products)
         } catch (e: Exception) {
-            emit(emptyList())
+            val cached = try {
+                database?.cachedProductDao()?.getAllProducts()
+            } catch (_: Exception) {
+                null
+            } ?: emptyList()
+
+            if (cached.isNotEmpty()) {
+                emit(cached.map { it.toProduct() })
+            } else {
+                val deals = try {
+                    database?.cachedDealDao()?.getAllDealsSync()
+                } catch (_: Exception) {
+                    null
+                } ?: emptyList()
+                emit(deals.map { it.toProduct() })
+            }
         }
     }.flowOn(Dispatchers.IO)
 
     override fun getStoreById(storeId: String): Flow<Store?> = flow {
         try {
             val netStore = api.service.getStoreById(storeId)
-            emit(netStore.toStore())
+            val store = netStore.toStore()
+            try {
+                database?.cachedStoreDao()?.insertStore(CachedStoreEntity.fromStore(store))
+            } catch (_: Exception) {}
+            emit(store)
         } catch (e: Exception) {
-            emit(null)
+            val cached = try {
+                database?.cachedStoreDao()?.getStoreById(storeId)
+            } catch (_: Exception) {
+                null
+            }
+            emit(cached?.toStore())
         }
     }.flowOn(Dispatchers.IO)
 
@@ -356,13 +490,15 @@ class NetworkPriceBridgeRepository(
         sourceType: String
     ) {
         val pence = (price * 100).toInt()
+        val idempotencyKey = "sub_${UUID.randomUUID()}"
         val payload = NetworkPriceSubmission(
             productId = productId,
             storeId = storeId,
             regularPricePence = pence,
-            sourceType = sourceType
+            sourceType = sourceType,
+            idempotencyKey = idempotencyKey
         )
-        api.service.submitPrice(payload)
+        api.service.submitPrice(payload, idempotencyKey)
 
         submissionHistory.update { history ->
             listOf(
@@ -381,9 +517,11 @@ class NetworkPriceBridgeRepository(
         }
     }
 
-    override fun getPendingOfflineSubmissionCount(): Flow<Int> = pendingOfflineCount.asStateFlow()
+    override fun getPendingOfflineSubmissionCount(): Flow<Int> =
+        database?.queuedSubmissionDao()?.observePendingCount() ?: pendingOfflineCount.asStateFlow()
 
-    override fun getQueuedSubmissions(): Flow<List<QueuedSubmissionEntity>> = queuedSubmissionsState.asStateFlow()
+    override fun getQueuedSubmissions(): Flow<List<QueuedSubmissionEntity>> =
+        database?.queuedSubmissionDao()?.getAllSubmissions() ?: queuedSubmissionsState.asStateFlow()
 
     override suspend fun enqueueOfflinePrice(
         productId: String,
@@ -392,15 +530,104 @@ class NetworkPriceBridgeRepository(
         mrp: Double,
         sourceType: String
     ): String {
-        submitPrice(productId, storeId, price, mrp, sourceType)
-        return UUID.randomUUID().toString()
+        val submissionId = UUID.randomUUID().toString()
+        val idempotencyKey = "sub_${UUID.randomUUID()}"
+        val db = database
+
+        if (db != null) {
+            val cachedProd = db.cachedProductDao().getProductById(productId)
+            val cachedStore = db.cachedStoreDao().getStoreById(storeId)
+
+            val entity = QueuedSubmissionEntity(
+                id = submissionId,
+                idempotencyKey = idempotencyKey,
+                productId = productId,
+                productName = cachedProd?.name ?: "Product $productId",
+                storeId = storeId,
+                storeName = cachedStore?.name ?: "Store $storeId",
+                price = price,
+                mrp = mrp,
+                sourceType = sourceType,
+                status = QueuedSubmissionEntity.STATUS_PENDING,
+                createdAt = System.currentTimeMillis()
+            )
+            db.queuedSubmissionDao().insert(entity)
+
+            val ctx = context ?: PriceBridgeDatabase.appContext
+            if (ctx != null) {
+                PriceSyncWorker.enqueue(ctx)
+            }
+        } else {
+            val entity = QueuedSubmissionEntity(
+                id = submissionId,
+                idempotencyKey = idempotencyKey,
+                productId = productId,
+                productName = "Product $productId",
+                storeId = storeId,
+                storeName = "Store $storeId",
+                price = price,
+                mrp = mrp,
+                sourceType = sourceType,
+                status = QueuedSubmissionEntity.STATUS_PENDING,
+                createdAt = System.currentTimeMillis()
+            )
+            queuedSubmissionsState.update { listOf(entity) + it }
+            pendingOfflineCount.update { it + 1 }
+        }
+
+        return submissionId
     }
 
-    override suspend fun syncOfflineSubmissions(): Int = 0
+    override suspend fun syncOfflineSubmissions(): Int {
+        val ctx = context ?: PriceBridgeDatabase.appContext
+        if (ctx != null) {
+            PriceSyncWorker.enqueue(ctx)
+        }
 
-    override suspend fun retryQueuedSubmission(submissionId: String): Boolean = true
+        val db = database ?: return 0
+        val pending = db.queuedSubmissionDao().getPendingSubmissions()
+        var syncedCount = 0
 
-    override suspend fun cancelQueuedSubmission(submissionId: String) {}
+        for (item in pending) {
+            try {
+                val pence = (item.price * 100).toInt()
+                val payload = NetworkPriceSubmission(
+                    productId = item.productId,
+                    storeId = item.storeId,
+                    regularPricePence = pence,
+                    sourceType = item.sourceType,
+                    idempotencyKey = item.idempotencyKey
+                )
+                api.service.submitPrice(payload, item.idempotencyKey)
+                db.queuedSubmissionDao().updateStatus(
+                    id = item.id,
+                    status = QueuedSubmissionEntity.STATUS_SYNCED,
+                    retryCount = item.retryCount,
+                    lastAttemptAt = System.currentTimeMillis(),
+                    error = null
+                )
+                db.queuedSubmissionDao().deleteSubmission(item.id)
+                syncedCount++
+            } catch (_: Exception) {
+                // Handled / retried by WorkManager
+            }
+        }
+        return syncedCount
+    }
+
+    override suspend fun retryQueuedSubmission(submissionId: String): Boolean {
+        val ctx = context ?: PriceBridgeDatabase.appContext
+        if (ctx != null) {
+            PriceSyncWorker.enqueue(ctx)
+        }
+        return true
+    }
+
+    override suspend fun cancelQueuedSubmission(submissionId: String) {
+        database?.queuedSubmissionDao()?.deleteSubmission(submissionId)
+        queuedSubmissionsState.update { list -> list.filter { it.id != submissionId } }
+        pendingOfflineCount.update { (it - 1).coerceAtLeast(0) }
+    }
 
     // ── Shopping Basket & Tasks ──
 
@@ -578,6 +805,9 @@ class NetworkPriceBridgeRepository(
     }
 
     override suspend fun logout() {
+        try {
+            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+        } catch (_: Exception) {}
         AppSessionManager.logout()
     }
 

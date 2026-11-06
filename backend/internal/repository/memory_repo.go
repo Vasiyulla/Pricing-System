@@ -209,6 +209,16 @@ func (r *memoryPriceRepo) SubmitPrice(ctx context.Context, record domain.PriceRe
 	r.ms.mu.Lock()
 	defer r.ms.mu.Unlock()
 
+	if record.IdempotencyKey != "" {
+		for _, recs := range r.ms.prices {
+			for _, rec := range recs {
+				if rec.IdempotencyKey == record.IdempotencyKey {
+					return nil
+				}
+			}
+		}
+	}
+
 	existing := r.ms.prices[record.ProductID]
 	for i := range existing {
 		if existing[i].StoreID == record.StoreID && existing[i].SupersededBy == nil {

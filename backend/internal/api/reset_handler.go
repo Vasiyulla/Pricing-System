@@ -2,11 +2,14 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,9 +31,57 @@ type ResetResponse struct {
 	ResetTimeUTC string `json:"reset_time_utc"`
 }
 
+// CheckAdminAuthorization verifies admin authentication via Bearer token or X-Admin-Secret header.
+// It checks against os.Getenv("ADMIN_SECRET"). If unset in production, it denies access (HTTP 403).
+// If unset in non-production, it requires default secret "dev_admin_secret" to prevent accidental wipes.
+func CheckAdminAuthorization(r *http.Request) (bool, int, string) {
+	adminSecret := strings.TrimSpace(os.Getenv("ADMIN_SECRET"))
+	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+
+	if appEnv == "production" && adminSecret == "" {
+		return false, http.StatusForbidden, "Admin operations are strictly disabled in production when ADMIN_SECRET is not configured"
+	}
+
+	// Fallback secret for local development / testing when ADMIN_SECRET is not explicitly set
+	if adminSecret == "" {
+		adminSecret = "dev_admin_secret"
+	}
+
+	token := extractAdminToken(r)
+	if token == "" {
+		return false, http.StatusUnauthorized, "Unauthorized: missing admin authorization token"
+	}
+
+	if subtle.ConstantTimeCompare([]byte(token), []byte(adminSecret)) != 1 {
+		return false, http.StatusUnauthorized, "Unauthorized: invalid admin credentials"
+	}
+
+	return true, http.StatusOK, ""
+}
+
+func extractAdminToken(r *http.Request) string {
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	if authHeader != "" {
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			return strings.TrimSpace(authHeader[7:])
+		}
+		return authHeader
+	}
+	if xSecret := strings.TrimSpace(r.Header.Get("X-Admin-Secret")); xSecret != "" {
+		return xSecret
+	}
+	return ""
+}
+
 // ResetDatabase wipes old test submissions, test prices, and allows re-seeding
 // around the caller's live GPS coordinates anywhere in the world.
 func (h *APIHandler) ResetDatabase(w http.ResponseWriter, r *http.Request) {
+	// Defense-in-depth security guard: verify admin authorization before executing wipe
+	if ok, status, msg := CheckAdminAuthorization(r); !ok {
+		writeError(w, status, msg)
+		return
+	}
+
 	var req ResetRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
 

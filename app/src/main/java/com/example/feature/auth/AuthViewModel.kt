@@ -125,11 +125,11 @@ class AuthViewModel(
         }
     }
 
-    fun handleGoogleSignInResult(userData: com.example.core.auth.GoogleAuthManager.GoogleUserData) {
+    fun handleFirebaseSignInResult(userData: com.example.core.auth.FirebaseAuthManager.FirebaseUserData) {
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
             repository.loginWithGoogle(
-                idToken = userData.idToken,
+                idToken = userData.firebaseIdToken,
                 email = userData.email,
                 displayName = userData.displayName,
                 photoUrl = userData.photoUrl
@@ -138,8 +138,8 @@ class AuthViewModel(
         }
     }
 
-    fun handleGoogleSignInError(error: Throwable) {
-        _uiState.update { it.copy(isLoading = false, errorMessage = "Google Sign-In failed: ${error.localizedMessage ?: "Unknown error"}") }
+    fun handleFirebaseSignInError(error: Throwable) {
+        _uiState.update { it.copy(isLoading = false, errorMessage = "Firebase Google Sign-In failed: ${error.localizedMessage ?: "Unknown error"}") }
     }
 
     private fun loginWithGoogle() {

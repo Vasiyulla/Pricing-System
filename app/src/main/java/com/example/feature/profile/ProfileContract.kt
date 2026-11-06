@@ -24,7 +24,9 @@ data class ProfileUiState(
     val autoSyncOnWifi: Boolean = true,
     val compressReceiptImages: Boolean = true,
     val preferredRadiusKm: Double = 1.5,
-    val isCacheClearedMessageVisible: Boolean = false
+    val isCacheClearedMessageVisible: Boolean = false,
+    val isResettingData: Boolean = false,
+    val resetSuccessMessage: String? = null
 )
 
 sealed interface ProfileUiEvent {
@@ -40,6 +42,7 @@ sealed interface ProfileUiEvent {
     data class OnToggleCompressImages(val enabled: Boolean) : ProfileUiEvent
     data class OnSelectPreferredRadius(val radiusKm: Double) : ProfileUiEvent
     data object OnClearLocalCache : ProfileUiEvent
+    data object OnResetAllData : ProfileUiEvent
     data object OnEditProfileClicked : ProfileUiEvent
     data object OnOpenProfileSwitcher : ProfileUiEvent
     data object OnDismissProfileSwitcher : ProfileUiEvent

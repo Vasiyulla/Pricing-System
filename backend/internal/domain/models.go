@@ -90,6 +90,8 @@ type Store struct {
 	VerificationStatus StoreVerificationStatus `json:"verification_status,omitempty"`
 	ReliabilityScore   int                     `json:"reliability_score,omitempty"`
 	IsConfirmedPartner bool                    `json:"is_confirmed_partner,omitempty"`
+	OperatingHours     string                  `json:"operating_hours,omitempty"`
+	Phone              string                  `json:"phone,omitempty"`
 }
 
 // StoreVerificationResult represents existence verification outcome
@@ -143,6 +145,7 @@ type PriceRecord struct {
 	ConfidenceScore   float64         `json:"confidence_score"`
 	ObservedAt        time.Time       `json:"observed_at"`
 	SupersededBy      *string         `json:"superseded_by,omitempty"`
+	IdempotencyKey    string          `json:"idempotency_key,omitempty"`
 }
 
 // StorePriceComparison summarizes price comparison across stores for a product

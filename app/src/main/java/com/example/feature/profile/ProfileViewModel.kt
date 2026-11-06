@@ -88,9 +88,24 @@ class ProfileViewModel(
             }
             is ProfileUiEvent.OnClearLocalCache -> {
                 viewModelScope.launch {
+                    repository.clearAllData(wipeServerDb = false)
                     _uiState.update { it.copy(isCacheClearedMessageVisible = true) }
                     kotlinx.coroutines.delay(2000)
                     _uiState.update { it.copy(isCacheClearedMessageVisible = false) }
+                }
+            }
+            is ProfileUiEvent.OnResetAllData -> {
+                viewModelScope.launch {
+                    _uiState.update { it.copy(isResettingData = true, resetSuccessMessage = null) }
+                    val success = repository.clearAllData(wipeServerDb = true)
+                    _uiState.update {
+                        it.copy(
+                            isResettingData = false,
+                            resetSuccessMessage = if (success) "App reset & database wiped cleanly! Restarting session..." else "Failed to reset server database."
+                        )
+                    }
+                    kotlinx.coroutines.delay(2500)
+                    _uiState.update { it.copy(resetSuccessMessage = null) }
                 }
             }
             is ProfileUiEvent.OnRetryQueuedSubmission -> {

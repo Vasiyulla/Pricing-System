@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"pricebridge/backend/internal/api"
 	"pricebridge/backend/internal/repository"
 	"pricebridge/backend/internal/service"
@@ -33,10 +35,12 @@ func main() {
 	var stickerRepo repository.YellowStickerRepository
 	var categoryRepo repository.CategoryRepository
 
+	var pgStore *repository.PostgresStore
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL != "" {
 		log.Printf("DATABASE_URL detected. Connecting to PostgreSQL 16 + PostGIS...")
-		pgStore, err := repository.NewPostgresStore(context.Background(), databaseURL)
+		var err error
+		pgStore, err = repository.NewPostgresStore(context.Background(), databaseURL)
 		if err != nil {
 			log.Fatalf("Fatal: Failed to connect to PostgreSQL: %v", err)
 		}
@@ -61,18 +65,55 @@ func main() {
 		log.Printf("Storage Engine: In-memory store (10 London Supermarkets, 25 Staple Products)")
 	}
 
-	// 2. Initialize Services
-	compareSvc := service.NewCompareService(storeRepo, priceRepo)
+	// 2. Initialize Redis Client (Distributed Geohash Cache & Concurrency Stampede Guard)
+	var rdb *redis.Client
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL != "" {
+		log.Printf("REDIS_URL detected. Connecting to Redis...")
+		opt, err := redis.ParseURL(redisURL)
+		if err != nil {
+			log.Printf("[Redis] Warning: Failed to parse REDIS_URL: %v (falling back to in-memory caching)", err)
+		} else {
+			opt.PoolSize = 25
+			opt.MinIdleConns = 5
+			opt.DialTimeout = 5 * time.Second
+			opt.ReadTimeout = 3 * time.Second
+			opt.WriteTimeout = 3 * time.Second
+
+			client := redis.NewClient(opt)
+			pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			if err := client.Ping(pingCtx).Err(); err != nil {
+				cancel()
+				client.Close()
+				log.Printf("[Redis] Warning: Redis ping check failed: %v (falling back to in-memory caching)", err)
+			} else {
+				cancel()
+				rdb = client
+				defer rdb.Close()
+				log.Printf("[Redis] Connected successfully to Redis at %s (SingleFlight geohash cache active)", opt.Addr)
+			}
+		}
+	} else {
+		log.Printf("REDIS_URL not set. Running with local in-memory spatial caching.")
+	}
+
+	// 3. Initialize Services
+	compareSvc := service.NewCompareService(storeRepo, priceRepo, rdb)
 	optimizerSvc := service.NewOptimizerService(storeRepo, priceRepo)
 	trolleySvc := service.NewTrolleyService(storeRepo, prodRepo, priceRepo)
 	aiSvc := service.NewAIService()
 	storeVerifier := service.NewStoreVerifier(storeRepo)
 
-	// 3. Initialize API Handler & Chi Router
+	// 4. Initialize API Handler & Chi Router
 	handler := api.NewAPIHandler(
 		storeRepo, prodRepo, priceRepo, bountyRepo, stickerRepo, categoryRepo,
 		compareSvc, optimizerSvc, trolleySvc, aiSvc, storeVerifier,
 	)
+	if pgStore != nil {
+		handler.SetHealthProbes(pgStore.Ping, rdb)
+	} else {
+		handler.SetHealthProbes(nil, rdb)
+	}
 	router := api.NewRouter(handler)
 
 	// 4. Start HTTP Server

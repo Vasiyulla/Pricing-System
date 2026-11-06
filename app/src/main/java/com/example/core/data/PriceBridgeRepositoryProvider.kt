@@ -15,7 +15,7 @@ object PriceBridgeRepositoryProvider {
             synchronized(this) {
                 if (instance == null) {
                     val db = PriceBridgeDatabase.getInstance(context.applicationContext)
-                    instance = NetworkPriceBridgeRepository(database = db)
+                    instance = NetworkPriceBridgeRepository(database = db, context = context.applicationContext)
                 }
             }
         }

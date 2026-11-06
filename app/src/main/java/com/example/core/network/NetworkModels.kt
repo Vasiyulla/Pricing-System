@@ -63,7 +63,8 @@ data class NetworkPriceSubmission(
     @Json(name = "regular_price_pence") val regularPricePence: Int,
     @Json(name = "loyalty_price_pence") val loyaltyPricePence: Int? = null,
     @Json(name = "loyalty_scheme") val loyaltyScheme: String? = null,
-    @Json(name = "source_type") val sourceType: String = "mobile_app"
+    @Json(name = "source_type") val sourceType: String = "mobile_app",
+    @Json(name = "idempotency_key") val idempotencyKey: String? = null
 )
 
 @JsonClass(generateAdapter = true)

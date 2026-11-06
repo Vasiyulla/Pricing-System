@@ -1,6 +1,8 @@
 package com.example.core.data.offline
 
+import android.content.Context
 import com.example.core.data.PriceBridgeRepository
+import com.example.core.data.local.PriceBridgeDatabase
 import com.example.core.data.local.dao.QueuedSubmissionDao
 import com.example.core.data.local.entity.QueuedSubmissionEntity
 import kotlinx.coroutines.flow.Flow
@@ -8,11 +10,13 @@ import java.util.UUID
 
 /**
  * Service managing offline price submissions, idempotent queuing, and synchronization.
- * Implements Sprint 6 resilience: offline queue with Room, preserving idempotency keys across retries.
+ * Implements Sprint 6 resilience: offline queue with Room, preserving idempotency keys across retries,
+ * and background synchronization via WorkManager.
  */
 class OfflineSubmissionManager(
     private val dao: QueuedSubmissionDao,
-    private val repository: PriceBridgeRepository
+    private val repository: PriceBridgeRepository,
+    private val context: Context? = null
 ) {
     /**
      * Observes count of pending offline submissions.
@@ -27,6 +31,7 @@ class OfflineSubmissionManager(
     /**
      * Enqueue a submission for offline storage.
      * Generates a unique client-side idempotency key that persists across retries.
+     * Schedules PriceSyncWorker to synchronize once network connectivity is available.
      */
     suspend fun enqueue(
         productId: String,
@@ -53,6 +58,13 @@ class OfflineSubmissionManager(
             createdAt = System.currentTimeMillis()
         )
         dao.insert(submission)
+
+        // Enqueue WorkManager background job
+        val ctx = context ?: PriceBridgeDatabase.appContext
+        if (ctx != null) {
+            PriceSyncWorker.enqueue(ctx)
+        }
+
         return submission
     }
 
@@ -61,6 +73,11 @@ class OfflineSubmissionManager(
      * Returns count of successfully synced submissions.
      */
     suspend fun syncPending(): Int {
+        val ctx = context ?: PriceBridgeDatabase.appContext
+        if (ctx != null) {
+            PriceSyncWorker.enqueue(ctx)
+        }
+
         val pending = dao.getPendingSubmissions()
         var successCount = 0
 
@@ -74,7 +91,7 @@ class OfflineSubmissionManager(
             )
 
             try {
-                // Submit to repository using the saved idempotency key
+                // Submit to repository
                 repository.submitPrice(
                     productId = item.productId,
                     storeId = item.storeId,
@@ -83,7 +100,7 @@ class OfflineSubmissionManager(
                     sourceType = item.sourceType
                 )
 
-                // Mark synced
+                // Mark synced and remove from queue
                 dao.updateStatus(
                     id = item.id,
                     status = QueuedSubmissionEntity.STATUS_SYNCED,
@@ -91,6 +108,7 @@ class OfflineSubmissionManager(
                     lastAttemptAt = System.currentTimeMillis(),
                     error = null
                 )
+                dao.deleteSubmission(item.id)
                 successCount++
             } catch (ex: Exception) {
                 // Mark failed or retry

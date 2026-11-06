@@ -1,10 +1,23 @@
 package api 
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 )
+
+// AdminAuthMiddleware ensures only authorized callers with valid admin credentials can access admin routes.
+func AdminAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ok, status, msg := CheckAdminAuthorization(r); !ok {
+			writeError(w, status, msg)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 func NewRouter(h *APIHandler) *chi.Mux {
 	r := chi.NewRouter()
@@ -82,8 +95,9 @@ func NewRouter(h *APIHandler) *chi.Mux {
 			r.Post("/yellow-sticker-scan", h.ScanYellowStickerAI)
 		})
 
-		// Admin & Testing Controls
+		// Admin & Testing Controls (Secured with Admin Authentication Guard)
 		r.Route("/admin", func(r chi.Router) {
+			r.Use(AdminAuthMiddleware)
 			r.Post("/db/reset", h.ResetDatabase)
 		})
 	})

@@ -144,12 +144,48 @@ object Routes {
 
 class MainActivity : ComponentActivity() {
 
+    private val locationPermissionRequest = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            fetchLiveDeviceLocation()
+        }
+    }
+
+    private fun fetchLiveDeviceLocation() {
+        val locManager = DeviceLocationManager(this)
+        CoroutineScope(Dispatchers.IO).launch {
+            val geo = locManager.getAccurateLocation(highAccuracy = false)
+            withContext(Dispatchers.Main) {
+                (PriceBridgeRepositoryProvider.repository as? NetworkPriceBridgeRepository)?.setCoordinates(
+                    lat = geo.latitude,
+                    lon = geo.longitude,
+                    neighborhood = geo.areaName
+                )
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
 
         super.onCreate(savedInstanceState)
 
         AppSessionManager.init(this)
         PriceBridgeRepositoryProvider.init(this)
+
+        val locManager = DeviceLocationManager(this)
+        if (locManager.hasLocationPermission()) {
+            fetchLiveDeviceLocation()
+        } else {
+            locationPermissionRequest.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
 
         enableEdgeToEdge()
 
@@ -392,6 +428,12 @@ fun PriceBridgeNavHost(
 
                     }
 
+                },
+
+                onNavigateToTwoStopBasket = {
+
+                    navController.navigate(Routes.TWO_STOP_BASKET)
+
                 }
 
             )
@@ -449,6 +491,12 @@ fun PriceBridgeNavHost(
                 onNavigateToAuth = {
 
                     navController.navigate(Routes.AUTH)
+
+                },
+
+                onNavigateToBounties = {
+
+                    navController.navigate(Routes.BOUNTIES)
 
                 }
 

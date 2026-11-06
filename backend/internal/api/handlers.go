@@ -1,15 +1,19 @@
 package api
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 
 	"pricebridge/backend/internal/domain"
 	"pricebridge/backend/internal/repository"
@@ -28,6 +32,8 @@ type APIHandler struct {
 	trolleySvc   *service.TrolleyService
 	aiSvc        *service.AIService
 	verifierSvc  service.StoreVerifier
+	pgPing       func(ctx context.Context) error
+	rdb          *redis.Client
 }
 
 func NewAPIHandler(
@@ -58,6 +64,12 @@ func NewAPIHandler(
 	}
 }
 
+// SetHealthProbes configures live health check pings for database and cache layers
+func (h *APIHandler) SetHealthProbes(pgPing func(ctx context.Context) error, rdb *redis.Client) {
+	h.pgPing = pgPing
+	h.rdb = rdb
+}
+
 // ── Helpers ──
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
@@ -73,11 +85,56 @@ func writeError(w http.ResponseWriter, status int, message string) {
 // ── Health ──
 
 func (h *APIHandler) Health(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	status := "healthy"
+	deps := make(map[string]interface{})
+
+	// Check PostgreSQL live ping
+	if h.pgPing != nil {
+		if err := h.pgPing(ctx); err != nil {
+			status = "degraded"
+			deps["postgres"] = map[string]interface{}{
+				"status": "unhealthy",
+				"error":  err.Error(),
+			}
+		} else {
+			deps["postgres"] = map[string]interface{}{
+				"status": "healthy",
+			}
+		}
+	} else {
+		deps["postgres"] = map[string]interface{}{
+			"status": "in_memory",
+		}
+	}
+
+	// Check Redis live ping
+	if h.rdb != nil {
+		if err := h.rdb.Ping(ctx).Err(); err != nil {
+			status = "degraded"
+			deps["redis"] = map[string]interface{}{
+				"status": "unhealthy",
+				"error":  err.Error(),
+			}
+		} else {
+			deps["redis"] = map[string]interface{}{
+				"status": "healthy",
+			}
+		}
+	} else {
+		deps["redis"] = map[string]interface{}{
+			"status": "disabled",
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":    "healthy",
-		"service":   "pricebridge-backend",
-		"market":    "UK (London)",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"status":       status,
+		"service":      "pricebridge-backend",
+		"market":       "UK (London)",
+		"timestamp":    time.Now().UTC().Format(time.RFC3339),
+		"dependencies": deps,
 	})
 }
 
@@ -330,6 +387,7 @@ func (h *APIHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	sub := "google_usr_9981"
 
 	if req.IDToken != "" && req.IDToken != "demo_google_token" && len(req.IDToken) > 20 {
+		// 1. Try Google tokeninfo endpoint
 		verifyURL := "https://oauth2.googleapis.com/tokeninfo?id_token=" + url.QueryEscape(req.IDToken)
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Get(verifyURL)
@@ -346,6 +404,38 @@ func (h *APIHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 				name = gData.Name
 				picture = gData.Picture
 				sub = gData.Sub
+			}
+		} else {
+			// 2. Decode Firebase JWT payload if tokeninfo returned non-200
+			parts := strings.Split(req.IDToken, ".")
+			if len(parts) >= 2 {
+				segment := parts[1]
+				if l := len(segment) % 4; l > 0 {
+					segment += strings.Repeat("=", 4-l)
+				}
+				if decoded, err := base64.URLEncoding.DecodeString(segment); err == nil {
+					var fbClaims struct {
+						Email   string `json:"email"`
+						Name    string `json:"name"`
+						Picture string `json:"picture"`
+						UserID  string `json:"user_id"`
+						Sub     string `json:"sub"`
+					}
+					if err := json.Unmarshal(decoded, &fbClaims); err == nil && fbClaims.Email != "" {
+						email = fbClaims.Email
+						if fbClaims.Name != "" {
+							name = fbClaims.Name
+						}
+						if fbClaims.Picture != "" {
+							picture = fbClaims.Picture
+						}
+						if fbClaims.UserID != "" {
+							sub = fbClaims.UserID
+						} else if fbClaims.Sub != "" {
+							sub = fbClaims.Sub
+						}
+					}
+				}
 			}
 		}
 	}
@@ -422,6 +512,7 @@ type PriceSubmissionRequest struct {
 	LoyaltyPricePence *int   `json:"loyalty_price_pence,omitempty"`
 	LoyaltyScheme     string `json:"loyalty_scheme,omitempty"`
 	SourceType        string `json:"source_type"`
+	IdempotencyKey    string `json:"idempotency_key,omitempty"`
 }
 
 func (h *APIHandler) SubmitPrice(w http.ResponseWriter, r *http.Request) {
@@ -442,6 +533,12 @@ func (h *APIHandler) SubmitPrice(w http.ResponseWriter, r *http.Request) {
 		loyalty = domain.LoyaltyScheme(req.LoyaltyScheme)
 	}
 
+	// Read idempotency key from request payload, falling back to Idempotency-Key header
+	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
+	if idempotencyKey == "" {
+		idempotencyKey = strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	}
+
 	record := domain.PriceRecord{
 		ID:                uuid.New().String(),
 		ProductID:         req.ProductID,
@@ -454,11 +551,17 @@ func (h *APIHandler) SubmitPrice(w http.ResponseWriter, r *http.Request) {
 		SourceType:        req.SourceType,
 		ConfidenceScore:   0.6,
 		ObservedAt:        time.Now(),
+		IdempotencyKey:    idempotencyKey,
 	}
 
 	if err := h.priceRepo.SubmitPrice(r.Context(), record); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	// Invalidate distributed & local cache for this product
+	if h.compareSvc != nil {
+		_ = h.compareSvc.InvalidateProductCache(r.Context(), record.ProductID, record.StoreID)
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
@@ -492,9 +595,13 @@ func (h *APIHandler) BatchSyncPrices(w http.ResponseWriter, r *http.Request) {
 			FreshnessStatus:   domain.FreshnessRecentlyObserved,
 			SourceType:        "offline_sync",
 			ObservedAt:        time.Now(),
+			IdempotencyKey:    req.IdempotencyKey,
 		}
 		if err := h.priceRepo.SubmitPrice(r.Context(), record); err == nil {
 			count++
+			if h.compareSvc != nil {
+				_ = h.compareSvc.InvalidateProductCache(r.Context(), record.ProductID, record.StoreID)
+			}
 		}
 	}
 

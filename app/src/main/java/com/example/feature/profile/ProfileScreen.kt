@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -90,6 +91,7 @@ fun ProfileScreen(
     onNavigateToSaved: () -> Unit,
     modifier: Modifier = Modifier,
     onNavigateToAuth: () -> Unit = {},
+    onNavigateToBounties: () -> Unit = {},
     viewModel: ProfileViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -97,6 +99,7 @@ fun ProfileScreen(
     ProfileContent(
         uiState = uiState,
         onNavigateToAuth = onNavigateToAuth,
+        onNavigateToBounties = onNavigateToBounties,
         onEvent = { event ->
             when (event) {
                 is ProfileUiEvent.OnBottomNavClicked -> {
@@ -123,7 +126,8 @@ fun ProfileContent(
     uiState: ProfileUiState,
     onEvent: (ProfileUiEvent) -> Unit,
     modifier: Modifier = Modifier,
-    onNavigateToAuth: () -> Unit = {}
+    onNavigateToAuth: () -> Unit = {},
+    onNavigateToBounties: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -182,6 +186,7 @@ fun ProfileContent(
                             onInspectOfflineQueue = { onEvent(ProfileUiEvent.OnOpenOfflineQueueSheet) },
                             onSwitchProfile = { onEvent(ProfileUiEvent.OnOpenProfileSwitcher) },
                             onOpenDpdpNotice = { onEvent(ProfileUiEvent.OnOpenDpdpNotice) },
+                            onNavigateToBounties = onNavigateToBounties,
                             onAuthAction = {
                                 if (uiState.profile.isGuest) {
                                     onNavigateToAuth()
@@ -256,6 +261,8 @@ fun ProfileContent(
                         compressReceiptImages = uiState.compressReceiptImages,
                         preferredRadiusKm = uiState.preferredRadiusKm,
                         isCacheClearedMessageVisible = uiState.isCacheClearedMessageVisible,
+                        isResettingData = uiState.isResettingData,
+                        resetSuccessMessage = uiState.resetSuccessMessage,
                         onTogglePriceDropNotifs = { onEvent(ProfileUiEvent.OnTogglePriceDropNotifs(it)) },
                         onToggleFreshnessNotifs = { onEvent(ProfileUiEvent.OnToggleFreshnessNotifs(it)) },
                         onTogglePointsNotifs = { onEvent(ProfileUiEvent.OnTogglePointsNotifs(it)) },
@@ -263,6 +270,7 @@ fun ProfileContent(
                         onToggleCompressImages = { onEvent(ProfileUiEvent.OnToggleCompressImages(it)) },
                         onSelectPreferredRadius = { onEvent(ProfileUiEvent.OnSelectPreferredRadius(it)) },
                         onClearLocalCache = { onEvent(ProfileUiEvent.OnClearLocalCache) },
+                        onResetAllData = { onEvent(ProfileUiEvent.OnResetAllData) },
                         onOpenDpdpNotice = { onEvent(ProfileUiEvent.OnOpenDpdpNotice) },
                         onDismiss = { onEvent(ProfileUiEvent.OnDismissSettingsSheet) }
                     )
@@ -597,6 +605,7 @@ private fun ProfileActionsCard(
     onSwitchProfile: () -> Unit,
     onOpenDpdpNotice: () -> Unit,
     onAuthAction: () -> Unit,
+    onNavigateToBounties: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -728,6 +737,59 @@ private fun ProfileActionsCard(
                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
                         )
                     }
+                }
+            }
+
+            // AI Price Bounties & Tasks entry (Plan Phase 5 / R1)
+            Surface(
+                onClick = onNavigateToBounties,
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("btn_profile_ai_bounties")
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MilitaryTech,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "AI Price Bounties",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Fill missing price gaps nearby • Earn Karma Points",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Open Bounties",
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
 

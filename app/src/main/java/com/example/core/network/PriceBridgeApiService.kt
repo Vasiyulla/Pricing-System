@@ -2,6 +2,7 @@ package com.example.core.network
 
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -49,10 +50,16 @@ interface PriceBridgeApiService {
     ): NetworkTrolleyWhisper
 
     @POST("api/v1/prices/submit")
-    suspend fun submitPrice(@Body submission: NetworkPriceSubmission): Map<String, Any>
+    suspend fun submitPrice(
+        @Body submission: NetworkPriceSubmission,
+        @Header("Idempotency-Key") idempotencyKey: String? = null
+    ): Map<String, Any>
 
     @POST("api/v1/prices/batch-sync")
-    suspend fun batchSyncPrices(@Body submissions: List<NetworkPriceSubmission>): Map<String, Any>
+    suspend fun batchSyncPrices(
+        @Body submissions: List<NetworkPriceSubmission>,
+        @Header("Idempotency-Key") idempotencyKey: String? = null
+    ): Map<String, Any>
 
     @POST("api/v1/basket/optimize")
     suspend fun optimizeBasket(@Body request: NetworkBasketOptimizeRequest): NetworkTwoStopBasketResult

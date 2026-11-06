@@ -1,6 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
-
-
+import java.util.Properties
 
 plugins {
 
@@ -12,10 +11,19 @@ plugins {
 
   alias(libs.plugins.google.devtools.ksp)
 
-  alias(libs.plugins.secrets)
-
   alias(libs.plugins.google.services)
 
+}
+
+val envFile = rootProject.file(".env")
+val envProperties = Properties().apply {
+    if (envFile.exists()) {
+        envFile.bufferedReader().use { reader -> load(reader) }
+    }
+}
+
+fun getEnv(key: String, defaultVal: String = ""): String {
+    return System.getenv(key) ?: envProperties.getProperty(key) ?: defaultVal
 }
 
 
@@ -44,6 +52,11 @@ android {
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+    val webClientId = getEnv("GOOGLE_WEB_CLIENT_ID", getEnv("GOOGLE_CLIENT_ID", ""))
+    val backendBaseUrl = getEnv("BACKEND_BASE_URL", "https://pricing-system-4nhl.onrender.com/")
+
+    buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$webClientId\"")
+    buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
   }
 
 
@@ -51,7 +64,7 @@ android {
   signingConfigs {
 
     create("release") {
-
+ 
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
 
       storeFile = file(keystorePath)
@@ -144,19 +157,7 @@ android {
 
 
 
-// Configure the Secrets Gradle Plugin to use .env and .env.example files
 
-// to match the convention used in Web projects.
-
-secrets {
-
-  propertiesFileName = ".env"
-
-  defaultPropertiesFileName = ".env.example"
-
-  ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
-
-}
 
 
 
@@ -214,35 +215,19 @@ dependencies {
 
   implementation(libs.androidx.room.runtime)
 
+  implementation(libs.androidx.work.runtime.ktx)
+
   implementation(libs.coil.compose)
 
   implementation(libs.converter.moshi)
 
   implementation(libs.core.ktx)
 
-  implementation(libs.firebase.ai)
-
-  // Uncomment to use Firestore:
-
-  // implementation(libs.firebase.firestore)
-
-
-
-  // Uncomment ALL FOUR of the following dependencies together to use Firebase Auth and Google
-
-  // Sign-In via Credential Manager:
-
-  // implementation(libs.firebase.auth)
-
+  // Firebase Auth and Google Sign-In via Credential Manager:
+  implementation(libs.firebase.auth)
   implementation(libs.androidx.credentials)
-
   implementation(libs.androidx.credentials.play.services)
-
   implementation(libs.googleid)
-
-  implementation(libs.firebase.appcheck.recaptcha)
-
-  implementation(libs.firebase.appcheck.debug)
 
   implementation(libs.kotlinx.coroutines.android)
 
@@ -288,5 +273,53 @@ dependencies {
 
   "ksp"(libs.moshi.kotlin.codegen)
 
+}
+
+val generateGoogleServices = tasks.register("generateGoogleServicesFromEnv") {
+    doLast {
+        val projId = getEnv("FIREBASE_PROJECT_ID", "pricebridge-demo")
+        val apiKey = getEnv("FIREBASE_API_KEY", "AIzaSyPriceBridgeDeveloperKeyMock001")
+        val appId = getEnv("FIREBASE_APP_ID", "1:100000000001:android:pricebridgeclient001")
+        val webClient = getEnv("GOOGLE_WEB_CLIENT_ID", "100000000001-mockclientid001.apps.googleusercontent.com")
+
+        val targetFile = file("${projectDir}/google-services.json")
+        val jsonContent = """
+{
+  "project_info": {
+    "project_number": "100000000001",
+    "project_id": "$projId",
+    "storage_bucket": "$projId.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "$appId",
+        "android_client_info": {
+          "package_name": "com.aistudio.pricebridge.qvxkzp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "$webClient",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "$apiKey"
+        }
+      ],
+      "services": {}
+    }
+  ],
+  "configuration_version": "1"
+}
+""".trimIndent()
+        targetFile.writeText(jsonContent)
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn(generateGoogleServices)
 }
 

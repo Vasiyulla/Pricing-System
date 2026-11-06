@@ -73,7 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
-import com.example.core.auth.GoogleAuthManager
+import com.example.core.auth.FirebaseAuthManager
 import com.example.ui.theme.spacing
 import kotlinx.coroutines.launch
 
@@ -90,7 +90,7 @@ fun AuthScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val googleAuthManager = remember { GoogleAuthManager(context) }
+    val firebaseAuthManager = remember { FirebaseAuthManager(context) }
 
     LaunchedEffect(uiState.step) {
         if (uiState.step == AuthStep.SUCCESS) {
@@ -103,14 +103,14 @@ fun AuthScreen(
         onEvent = { event ->
             if (event is AuthUiEvent.OnGoogleSignInClicked) {
                 coroutineScope.launch {
-                    when (val result = googleAuthManager.signInWithGoogle(context)) {
-                        is GoogleAuthManager.AuthResult.Success -> {
-                            viewModel.handleGoogleSignInResult(result.data)
+                    when (val result = firebaseAuthManager.signInWithGoogle(context)) {
+                        is FirebaseAuthManager.AuthResult.Success -> {
+                            viewModel.handleFirebaseSignInResult(result.user)
                         }
-                        is GoogleAuthManager.AuthResult.Error -> {
-                            viewModel.handleGoogleSignInError(result.throwable)
+                        is FirebaseAuthManager.AuthResult.Error -> {
+                            viewModel.handleFirebaseSignInError(result.throwable)
                         }
-                        is GoogleAuthManager.AuthResult.Cancelled -> {
+                        is FirebaseAuthManager.AuthResult.Cancelled -> {
                             // User dismissed account picker, do nothing
                         }
                     }
