@@ -32,11 +32,13 @@ import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api 
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -44,10 +46,22 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import com.example.core.location.DeviceLocationManager
+import com.example.core.data.PriceBridgeRepositoryProvider
+import com.example.core.data.NetworkPriceBridgeRepository
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -455,7 +469,7 @@ fun HomeContent(
             dragHandle = { BottomSheetDefaults.DragHandle() }
         ) {
             LocationSelectionSheetContent(
-                currentNeighborhood = uiState.location.neighborhood,
+                currentLocation = uiState.location,
                 onSelectLocation = { neighborhood, radius ->
                     onEvent(HomeUiEvent.OnChangeLocation(neighborhood, radius))
                 }
@@ -494,30 +508,95 @@ fun HomeContent(
     }
 }
 
-private data class NeighborhoodOption(
-    val name: String,
-    val zone: String,
-    val storeCount: Int
-)
-
 @Composable
 private fun LocationSelectionSheetContent(
-    currentNeighborhood: String,
+    currentLocation: LocationInfo,
     onSelectLocation: (String, Double) -> Unit
 ) {
-    var selectedLocation by remember { mutableStateOf(currentNeighborhood) }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val locManager = remember { DeviceLocationManager(context) }
+
+    var isDetecting by remember { mutableStateOf(false) }
+    var activeNeighborhood by remember { mutableStateOf(currentLocation.neighborhood) }
+    var activeCoords by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var activeAccuracy by remember { mutableStateOf<Float?>(null) }
     var selectedRadius by remember { mutableStateOf(1.5) }
+    var isManualEditOpen by remember { mutableStateOf(false) }
+    var manualLocationText by remember { mutableStateOf("") }
+    var locationError by remember { mutableStateOf<String?>(null) }
 
-    val locations = listOf(
-        NeighborhoodOption("Camden Town (NW1)", "North London", 12),
-        NeighborhoodOption("Covent Garden / Soho (WC2)", "Central London", 15),
-        NeighborhoodOption("Angel & Islington (N1)", "Inner North", 11),
-        NeighborhoodOption("Shoreditch & Hackney (E1)", "East London", 14),
-        NeighborhoodOption("Brixton & Lambeth (SW9)", "South London", 10),
-        NeighborhoodOption("Kensington & Chelsea (SW7)", "West London", 13)
-    )
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            isDetecting = true
+            locationError = null
+            coroutineScope.launch {
+                val geo = locManager.getAccurateLocation(highAccuracy = true)
+                withContext(Dispatchers.Main) {
+                    isDetecting = false
+                    if (geo.latitude != 0.0 || geo.longitude != 0.0) {
+                        activeNeighborhood = geo.areaName
+                        activeCoords = Pair(geo.latitude, geo.longitude)
+                        activeAccuracy = geo.accuracyMeters
+                        (PriceBridgeRepositoryProvider.repository as? NetworkPriceBridgeRepository)?.setCoordinates(
+                            lat = geo.latitude,
+                            lon = geo.longitude,
+                            neighborhood = geo.areaName
+                        )
+                    } else {
+                        locationError = "Unable to acquire GPS fix. Please ensure device location is enabled."
+                    }
+                }
+            }
+        } else {
+            locationError = "Location permission denied. You can enter your neighborhood manually below."
+        }
+    }
 
-    val radii = listOf(1.0, 1.5, 3.0, 5.0)
+    val requestGps: () -> Unit = {
+        if (!locManager.hasLocationPermission()) {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        } else {
+            isDetecting = true
+            locationError = null
+            coroutineScope.launch {
+                val geo = locManager.getAccurateLocation(highAccuracy = true)
+                withContext(Dispatchers.Main) {
+                    isDetecting = false
+                    if (geo.latitude != 0.0 || geo.longitude != 0.0) {
+                        activeNeighborhood = geo.areaName
+                        activeCoords = Pair(geo.latitude, geo.longitude)
+                        activeAccuracy = geo.accuracyMeters
+                        (PriceBridgeRepositoryProvider.repository as? NetworkPriceBridgeRepository)?.setCoordinates(
+                            lat = geo.latitude,
+                            lon = geo.longitude,
+                            neighborhood = geo.areaName
+                        )
+                    } else {
+                        locationError = "Unable to acquire GPS fix. Please ensure device location is enabled."
+                    }
+                }
+            }
+        }
+    }
+
+    // Trigger initial detection if still default/empty
+    LaunchedEffect(Unit) {
+        if (activeNeighborhood.contains("Detecting") || activeNeighborhood.isBlank()) {
+            requestGps()
+        }
+    }
+
+    val radii = listOf(1.0, 1.5, 3.0, 5.0, 10.0)
 
     Column(
         modifier = Modifier
@@ -547,164 +626,168 @@ private fun LocationSelectionSheetContent(
             }
             Column {
                 Text(
-                    text = "Choose Shopping Area",
+                    text = "Live Device Location",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Compare prices across local kiranas & supermarkets",
+                    text = "Real-time GPS pinpoints nearby stores anywhere you are",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        // Neighborhood Selection Tiles
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        // Live GPS Card
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = "Live Device Location",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.outline
-            )
-
-            val isGpsSelected = selectedLocation == "Live Device GPS" || (!selectedLocation.startsWith("Camden") && !selectedLocation.startsWith("Covent") && !selectedLocation.startsWith("Angel") && !selectedLocation.startsWith("Shoreditch") && !selectedLocation.startsWith("Brixton") && !selectedLocation.startsWith("Kensington"))
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = if (isGpsSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                border = BorderStroke(
-                    width = if (isGpsSelected) 2.dp else 1.dp,
-                    color = if (isGpsSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { selectedLocation = "Live Device GPS" }
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isGpsSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.NearMe,
-                            contentDescription = null,
-                            tint = if (isGpsSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "My Live GPS (Anywhere)",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Real-time GPS • Auto-discovers local stores anywhere",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    if (isGpsSelected) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Selected",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "Preset Pilot Hubs (London)",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.outline
-            )
-
-            locations.forEach { item ->
-                val isSelected = selectedLocation.startsWith(item.name.substringBefore(","))
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    border = BorderStroke(
-                        width = if (isSelected) 2.dp else 1.dp,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { selectedLocation = item.name }
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(8.dp)
                                 .clip(CircleShape)
-                                .background(
-                                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = null,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                                .background(if (isDetecting) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary)
+                        )
+                        Text(
+                            text = if (isDetecting) "Acquiring Real-Time GPS…" else "Real-Time GPS Active",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
 
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = item.name,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "${item.zone} • ${item.storeCount} verified stores",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    if (isDetecting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
 
-                        if (isSelected) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Selected",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                // Neighborhood / Locality Name
+                Text(
+                    text = activeNeighborhood,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                // Coordinates & Accuracy
+                val coordsText = if (activeCoords != null && (activeCoords!!.first != 0.0 || activeCoords!!.second != 0.0)) {
+                    val acc = activeAccuracy?.let { " • ±${it.toInt()}m accuracy" } ?: ""
+                    "Lat: %.4f, Lon: %.4f%s".format(activeCoords!!.first, activeCoords!!.second, acc)
+                } else {
+                    "Hardware GPS sensor enabled • Auto-resolves locality"
+                }
+
+                Text(
+                    text = coordsText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Refresh / Detect Button
+                OutlinedButton(
+                    onClick = { requestGps() },
+                    shape = RoundedCornerShape(10.dp),
+                    enabled = !isDetecting,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.NearMe,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isDetecting) "Locating Device…" else "Refresh Live GPS Location",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+
+        // Error message if any
+        if (locationError != null) {
+            Text(
+                text = locationError!!,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
+
+        // Manual Location Fallback Toggle
+        if (!isManualEditOpen) {
+            TextButton(
+                onClick = { isManualEditOpen = true },
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text(
+                    text = "Enter locality manually instead",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Custom Locality or Landmark",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = manualLocationText,
+                        onValueChange = { manualLocationText = it },
+                        placeholder = { Text("e.g. Indiranagar, Koramangala", style = MaterialTheme.typography.bodySmall) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = {
+                            if (manualLocationText.isNotBlank()) {
+                                activeNeighborhood = manualLocationText.trim()
+                                isManualEditOpen = false
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = manualLocationText.isNotBlank()
+                    ) {
+                        Text("Set")
                     }
                 }
             }
         }
 
-        // Search Radius Selector
+        // Shopping Radius Selector
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = "Shopping Radius",
@@ -746,7 +829,7 @@ private fun LocationSelectionSheetContent(
         Spacer(modifier = Modifier.height(4.dp))
 
         Button(
-            onClick = { onSelectLocation(selectedLocation, selectedRadius) },
+            onClick = { onSelectLocation(activeNeighborhood, selectedRadius) },
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier
                 .fillMaxWidth()
@@ -754,7 +837,7 @@ private fun LocationSelectionSheetContent(
                 .testTag("btn_confirm_location")
         ) {
             Text(
-                text = "Apply & Explore Nearby Prices",
+                text = "Apply Live Location & Refresh Prices",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )

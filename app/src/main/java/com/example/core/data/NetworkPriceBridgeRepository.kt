@@ -60,23 +60,28 @@ class NetworkPriceBridgeRepository(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // Default user coordinates (Camden / Central London, UK)
-    private var currentLat: Double = 51.5074
-    private var currentLon: Double = -0.1278
+    // Live user coordinates (dynamically supplied by DeviceLocationManager GPS)
+    private var currentLat: Double = 0.0
+    private var currentLon: Double = 0.0
 
     fun setCoordinates(lat: Double, lon: Double, neighborhood: String? = null) {
         currentLat = lat
         currentLon = lon
         if (neighborhood != null) {
-            currentLocation.update { it.copy(neighborhood = neighborhood) }
+            currentLocation.update {
+                it.copy(
+                    neighborhood = neighborhood,
+                    addressLine = "Live GPS Active"
+                )
+            }
         }
     }
 
     private val currentLocation = MutableStateFlow(
         LocationInfo(
-            neighborhood = "Camden High St, London",
-            addressLine = "Greater London, UK",
-            radiusDescription = "2.0 mi radius",
+            neighborhood = "Detecting Live Location...",
+            addressLine = "Real-time GPS",
+            radiusDescription = "1.5 km radius",
             isLiveTrackingActive = true
         )
     )
@@ -854,21 +859,11 @@ class NetworkPriceBridgeRepository(
     }
 
     override suspend fun updateLocation(neighborhood: String, radiusKm: Double) {
-        when {
-            neighborhood.contains("Camden", ignoreCase = true) -> setCoordinates(51.5390, -0.1426, neighborhood)
-            neighborhood.contains("Covent Garden", ignoreCase = true) -> setCoordinates(51.5120, -0.1230, neighborhood)
-            neighborhood.contains("Angel", ignoreCase = true) -> setCoordinates(51.5310, -0.1060, neighborhood)
-            neighborhood.contains("Shoreditch", ignoreCase = true) -> setCoordinates(51.5240, -0.0780, neighborhood)
-            neighborhood.contains("Brixton", ignoreCase = true) -> setCoordinates(51.4620, -0.1150, neighborhood)
-            neighborhood.contains("Kensington", ignoreCase = true) -> setCoordinates(51.5010, -0.1930, neighborhood)
-            else -> {
-                currentLocation.update {
-                    it.copy(
-                        neighborhood = neighborhood,
-                        radiusDescription = "${radiusKm} km radius"
-                    )
-                }
-            }
+        currentLocation.update {
+            it.copy(
+                neighborhood = if (neighborhood.isNotBlank()) neighborhood else it.neighborhood,
+                radiusDescription = "${radiusKm} km radius"
+            )
         }
     }
 

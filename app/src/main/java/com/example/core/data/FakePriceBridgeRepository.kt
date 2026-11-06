@@ -33,8 +33,8 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
 
     private val currentLocation = MutableStateFlow(
         LocationInfo(
-            neighborhood = "Indiranagar, 100ft Rd",
-            addressLine = "Bangalore, Karnataka",
+            neighborhood = "Detecting Live Location...",
+            addressLine = "Real-time GPS",
             radiusDescription = "1.5 km radius",
             isLiveTrackingActive = true
         )
@@ -1333,7 +1333,7 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
     override suspend fun updateLocation(neighborhood: String, radiusKm: Double) {
         currentLocation.value = LocationInfo(
             neighborhood = neighborhood,
-            addressLine = "Bangalore, Karnataka",
+            addressLine = "Real-time GPS",
             radiusDescription = "$radiusKm km radius",
             isLiveTrackingActive = true
         )

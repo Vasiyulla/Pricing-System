@@ -157,7 +157,7 @@ class MainActivity : ComponentActivity() {
     private fun fetchLiveDeviceLocation() {
         val locManager = DeviceLocationManager(this)
         CoroutineScope(Dispatchers.IO).launch {
-            val geo = locManager.getAccurateLocation(highAccuracy = false)
+            val geo = locManager.getAccurateLocation(highAccuracy = true)
             withContext(Dispatchers.Main) {
                 (PriceBridgeRepositoryProvider.repository as? NetworkPriceBridgeRepository)?.setCoordinates(
                     lat = geo.latitude,

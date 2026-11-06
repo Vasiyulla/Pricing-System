@@ -10,8 +10,8 @@
     <string name="status_flagged_for_review">Flagged for review</string>
 
     <!-- Top Bar & Search -->
-    <string name="default_location_title">Camden High St, London</string>
-    <string name="default_radius_tag">2.0 mi radius</string>
+    <string name="default_location_title">Detecting Live Location…</string>
+    <string name="default_radius_tag">1.5 km radius</string>
     <string name="live_prices_indicator">Live prices</string>
     <string name="search_placeholder">Search products, groceries, medicine…</string>
     <string name="cd_notifications">Notifications</string>

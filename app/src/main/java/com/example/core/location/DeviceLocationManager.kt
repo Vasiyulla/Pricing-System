@@ -23,7 +23,7 @@ data class GeoLocation(
     val longitude: Double,
     val accuracyMeters: Float = 0f,
     val isFreshGps: Boolean = false,
-    val areaName: String = "Camden Town (NW1)"
+    val areaName: String = "Detecting Live Location..."
 )
 
 /**
@@ -36,20 +36,20 @@ class DeviceLocationManager(private val context: Context) {
     private val fusedLocationClient: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
 
-    // Default to Camden Town / Central London (NW1) if permission not yet granted
+    // Initial state before live GPS fix is received
     private val _currentLocation = MutableStateFlow(
         GeoLocation(
-            latitude = 51.5390,
-            longitude = -0.1426,
-            accuracyMeters = 15.0f,
+            latitude = 0.0,
+            longitude = 0.0,
+            accuracyMeters = 0.0f,
             isFreshGps = false,
-            areaName = "Camden Town (NW1)"
+            areaName = "Detecting Live Location..."
         )
     )
     val currentLocation: StateFlow<GeoLocation> = _currentLocation.asStateFlow()
 
     // Backward-compatible coordinate pair flow
-    private val _currentCoordinates = MutableStateFlow(Pair(51.5390, -0.1426))
+    private val _currentCoordinates = MutableStateFlow(Pair(0.0, 0.0))
     val currentCoordinates: StateFlow<Pair<Double, Double>> = _currentCoordinates.asStateFlow()
 
     fun hasLocationPermission(): Boolean {
@@ -148,10 +148,10 @@ class DeviceLocationManager(private val context: Context) {
     }
 
     /**
-     * Resolves human-readable locality and city anywhere in the world using Android Geocoder,
-     * with graceful fallback to London postal districts.
+     * Resolves human-readable locality and city anywhere in the world using Android Geocoder.
      */
     private fun resolveAreaName(lat: Double, lon: Double): String {
+        if (lat == 0.0 && lon == 0.0) return "Detecting Live Location..."
         return try {
             val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
             @Suppress("DEPRECATION")
@@ -167,28 +167,13 @@ class DeviceLocationManager(private val context: Context) {
                 } else if (!city.isNullOrBlank()) {
                     city
                 } else {
-                    resolveLondonArea(lat, lon)
+                    "Live Location (%.3f, %.3f)".format(lat, lon)
                 }
             } else {
-                resolveLondonArea(lat, lon)
+                "Live Location (%.3f, %.3f)".format(lat, lon)
             }
         } catch (_: Exception) {
-            resolveLondonArea(lat, lon)
-        }
-    }
-
-    /**
-     * Maps London coordinates to borough / postal district for display
-     */
-    private fun resolveLondonArea(lat: Double, lon: Double): String {
-        return when {
-            lat >= 51.530 && lon in -0.160..-0.130 -> "Camden Town (NW1)"
-            lat in 51.510..51.525 && lon in -0.140..-0.115 -> "Covent Garden / Soho (WC2)"
-            lat in 51.525..51.545 && lon in -0.115..-0.080 -> "Angel & Islington (N1)"
-            lat in 51.515..51.535 && lon in -0.090..-0.050 -> "Shoreditch & Hackney (E1)"
-            lat in 51.455..51.480 && lon in -0.130..-0.090 -> "Brixton & Lambeth (SW9)"
-            lat in 51.490..51.510 && lon in -0.200..-0.160 -> "Kensington & Chelsea (SW7)"
-            else -> "Greater London"
+            "Live Location (%.3f, %.3f)".format(lat, lon)
         }
     }
 }

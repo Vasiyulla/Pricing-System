@@ -15,8 +15,8 @@ data class HomeUiState(
     val isOffline: Boolean = false,
     val errorMessage: String? = null,
     val location: LocationInfo = LocationInfo(
-        neighborhood = "Indiranagar, 100ft Rd",
-        addressLine = "Bangalore, Karnataka",
+        neighborhood = "Detecting Live Location...",
+        addressLine = "Real-time GPS",
         radiusDescription = "1.5 km radius",
         isLiveTrackingActive = true
     ),
