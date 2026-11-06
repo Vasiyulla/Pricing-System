@@ -85,6 +85,16 @@ func (s *PostgresStore) YellowStickerRepo() YellowStickerRepository { return s.y
 func (s *PostgresStore) CategoryRepo() CategoryRepository           { return s.categoryRepo }
 func (s *PostgresStore) Close()                                     { s.pool.Close() }
 
+func (s *PostgresStore) ExecuteRawSQL(ctx context.Context, sql string) error {
+	_, err := s.pool.Exec(ctx, sql)
+	return err
+}
+
+func (r *pgStoreRepo) ExecuteRawSQL(ctx context.Context, sql string) error {
+	_, err := r.pool.Exec(ctx, sql)
+	return err
+}
+
 func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	log.Printf("[Postgres] Applying schema migrations...")
 	_, err := pool.Exec(ctx, schemaSQL)

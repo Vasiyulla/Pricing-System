@@ -67,6 +67,7 @@ object AppSessionManager {
         mode: String = "GUEST",
         email: String = "alex.turner@gmail.com",
         name: String = "Alex Turner",
+        avatarUrl: String? = null,
         token: String = ""
     ) {
         _isLoggedIn.value = loggedIn
@@ -75,6 +76,7 @@ object AppSessionManager {
             ?.putString(KEY_AUTH_MODE, mode)
             ?.putString(KEY_USER_EMAIL, email)
             ?.putString(KEY_USER_NAME, name)
+            ?.putString(KEY_USER_AVATAR, avatarUrl ?: "")
             ?.putString(KEY_AUTH_TOKEN, token)
             ?.apply()
 

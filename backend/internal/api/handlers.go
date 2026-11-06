@@ -106,6 +106,17 @@ func (h *APIHandler) GetNearbyStores(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	// Universal Dynamic Store Discovery: If user is in a location with 0 stores nearby,
+	// automatically discover and seed local community stores around their live coordinates.
+	if len(stores) == 0 && lat != 0 && lon != 0 {
+		areaName := fmt.Sprintf("Local (%.2f, %.2f)", lat, lon)
+		seeded, seedErr := h.seedStoresAroundCoordinates(r.Context(), lat, lon, areaName)
+		if seedErr == nil && len(seeded) > 0 {
+			stores = seeded
+		}
+	}
+
 	writeJSON(w, http.StatusOK, stores)
 }
 
@@ -258,6 +269,12 @@ func (h *APIHandler) GetBestDealsBatch(w http.ResponseWriter, r *http.Request) {
 		domain.LoyaltyClubcard: true,
 		domain.LoyaltyNectar:   true,
 		domain.LoyaltyLidlPlus: true,
+	}
+
+	// Ensure nearby stores exist for this location; if not, auto-seed them
+	if nearby, _ := h.storeRepo.GetNearby(r.Context(), lat, lon, 10.0); len(nearby) == 0 {
+		areaName := fmt.Sprintf("Local (%.2f, %.2f)", lat, lon)
+		_, _ = h.seedStoresAroundCoordinates(r.Context(), lat, lon, areaName)
 	}
 
 	summaries := make([]domain.ProductDealSummary, 0, len(prods))

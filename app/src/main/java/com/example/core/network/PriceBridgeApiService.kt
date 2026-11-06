@@ -94,5 +94,10 @@ interface PriceBridgeApiService {
     suspend fun loginWithGoogle(
         @Body payload: Map<String, String>
     ): NetworkUserSession
+
+    @POST("api/v1/admin/db/reset")
+    suspend fun resetDatabase(
+        @Body payload: Map<String, @JvmSuppressWildcards Any> = emptyMap()
+    ): Map<String, Any>
 }
 

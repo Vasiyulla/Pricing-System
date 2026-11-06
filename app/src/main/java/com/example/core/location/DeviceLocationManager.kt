@@ -95,7 +95,7 @@ class DeviceLocationManager(private val context: Context) {
                             longitude = location.longitude,
                             accuracyMeters = location.accuracy,
                             isFreshGps = true,
-                            areaName = resolveLondonArea(location.latitude, location.longitude)
+                            areaName = resolveAreaName(location.latitude, location.longitude)
                         )
                         _currentLocation.value = geo
                         _currentCoordinates.value = Pair(geo.latitude, geo.longitude)
@@ -109,7 +109,7 @@ class DeviceLocationManager(private val context: Context) {
                                     longitude = lastLoc.longitude,
                                     accuracyMeters = lastLoc.accuracy,
                                     isFreshGps = false,
-                                    areaName = resolveLondonArea(lastLoc.latitude, lastLoc.longitude)
+                                    areaName = resolveAreaName(lastLoc.latitude, lastLoc.longitude)
                                 )
                                 _currentLocation.value = geo
                                 _currentCoordinates.value = Pair(geo.latitude, geo.longitude)
@@ -134,16 +134,47 @@ class DeviceLocationManager(private val context: Context) {
         return Pair(geo.latitude, geo.longitude)
     }
 
-    fun updateCoordinates(lat: Double, lon: Double, areaName: String = "Central London") {
+    fun updateCoordinates(lat: Double, lon: Double, areaName: String? = null) {
+        val resolvedName = areaName ?: resolveAreaName(lat, lon)
         val geo = GeoLocation(
             latitude = lat,
             longitude = lon,
             accuracyMeters = 5.0f,
             isFreshGps = false,
-            areaName = areaName
+            areaName = resolvedName
         )
         _currentLocation.value = geo
         _currentCoordinates.value = Pair(lat, lon)
+    }
+
+    /**
+     * Resolves human-readable locality and city anywhere in the world using Android Geocoder,
+     * with graceful fallback to London postal districts.
+     */
+    private fun resolveAreaName(lat: Double, lon: Double): String {
+        return try {
+            val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+            @Suppress("DEPRECATION")
+            val addresses = geocoder.getFromLocation(lat, lon, 1)
+            if (!addresses.isNullOrEmpty()) {
+                val addr = addresses[0]
+                val subLocality = addr.subLocality ?: addr.locality ?: addr.subAdminArea
+                val city = addr.locality ?: addr.adminArea ?: addr.countryName
+                if (!subLocality.isNullOrBlank() && !city.isNullOrBlank() && subLocality != city) {
+                    "$subLocality, $city"
+                } else if (!subLocality.isNullOrBlank()) {
+                    subLocality
+                } else if (!city.isNullOrBlank()) {
+                    city
+                } else {
+                    resolveLondonArea(lat, lon)
+                }
+            } else {
+                resolveLondonArea(lat, lon)
+            }
+        } catch (_: Exception) {
+            resolveLondonArea(lat, lon)
+        }
     }
 
     /**

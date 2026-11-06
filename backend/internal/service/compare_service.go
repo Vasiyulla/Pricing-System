@@ -34,6 +34,13 @@ func NewCompareService(storeRepo repository.StoreRepository, priceRepo repositor
 	}
 }
 
+// ClearCache clears the in-memory spatial geohash cache
+func (s *CompareService) ClearCache() {
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	s.cache = make(map[string]spatialCacheEntry)
+}
+
 // CompareProductAcrossStores fetches and ranks prices across nearby stores for a product,
 // protected by spatial geohash caching and singleflight request coalescing to prevent thundering herd.
 func (s *CompareService) CompareProductAcrossStores(ctx context.Context, productID string, userLat, userLon, radiusKm float64, userLoyaltySchemes map[domain.LoyaltyScheme]bool) ([]domain.StorePriceComparison, error) {

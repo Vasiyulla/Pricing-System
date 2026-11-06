@@ -1167,12 +1167,17 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
         return true
     }
 
-    override suspend fun loginWithGoogle(): Boolean {
+    override suspend fun loginWithGoogle(
+        idToken: String?,
+        email: String?,
+        displayName: String?,
+        photoUrl: String?
+    ): Boolean {
         kotlinx.coroutines.delay(600)
         isLoggedInState.value = true
         userProfile.value = userProfile.value.copy(
-            displayName = "Priya Sharma",
-            email = "priya.sharma@gmail.com",
+            displayName = displayName ?: "Priya Sharma",
+            email = email ?: "priya.sharma@gmail.com",
             isGuest = false
         )
         return true

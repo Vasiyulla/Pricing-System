@@ -1,4 +1,4 @@
-package api
+package api 
 
 import (
 	"github.com/go-chi/chi/v5"
@@ -80,6 +80,11 @@ func NewRouter(h *APIHandler) *chi.Mux {
 		r.Route("/ai", func(r chi.Router) {
 			r.Post("/receipt-scan", h.ScanReceiptAI)
 			r.Post("/yellow-sticker-scan", h.ScanYellowStickerAI)
+		})
+
+		// Admin & Testing Controls
+		r.Route("/admin", func(r chi.Router) {
+			r.Post("/db/reset", h.ResetDatabase)
 		})
 	})
 

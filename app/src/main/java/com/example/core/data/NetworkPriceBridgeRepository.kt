@@ -535,24 +535,34 @@ class NetworkPriceBridgeRepository(
         return true
     }
 
-    override suspend fun loginWithGoogle(): Boolean {
+    override suspend fun loginWithGoogle(
+        idToken: String?,
+        email: String?,
+        displayName: String?,
+        photoUrl: String?
+    ): Boolean {
         return try {
-            val session = api.service.loginWithGoogle(mapOf("id_token" to "demo_google_token"))
+            val token = idToken ?: "demo_google_token"
+            val session = api.service.loginWithGoogle(mapOf("id_token" to token))
             AppSessionManager.setLoggedIn(
                 loggedIn = true,
                 mode = "GOOGLE",
-                email = session.email,
-                name = session.displayName,
+                email = email ?: session.email,
+                name = displayName ?: session.displayName,
+                avatarUrl = photoUrl ?: session.avatarUrl,
                 token = session.token
             )
             true
         } catch (_: Exception) {
+            val effectiveEmail = email ?: "alex.turner@gmail.com"
+            val effectiveName = displayName ?: "Alex Turner"
             AppSessionManager.setLoggedIn(
                 loggedIn = true,
                 mode = "GOOGLE",
-                email = "alex.turner@gmail.com",
-                name = "Alex Turner",
-                token = "demo_jwt_token"
+                email = effectiveEmail,
+                name = effectiveName,
+                avatarUrl = photoUrl ?: "",
+                token = idToken ?: "demo_jwt_token"
             )
             true
         }
@@ -614,16 +624,61 @@ class NetworkPriceBridgeRepository(
     }
 
     override suspend fun updateLocation(neighborhood: String, radiusKm: Double) {
-        currentLocation.update {
-            it.copy(
-                neighborhood = neighborhood,
-                radiusDescription = "${radiusKm} km radius"
-            )
+        when {
+            neighborhood.contains("Camden", ignoreCase = true) -> setCoordinates(51.5390, -0.1426, neighborhood)
+            neighborhood.contains("Covent Garden", ignoreCase = true) -> setCoordinates(51.5120, -0.1230, neighborhood)
+            neighborhood.contains("Angel", ignoreCase = true) -> setCoordinates(51.5310, -0.1060, neighborhood)
+            neighborhood.contains("Shoreditch", ignoreCase = true) -> setCoordinates(51.5240, -0.0780, neighborhood)
+            neighborhood.contains("Brixton", ignoreCase = true) -> setCoordinates(51.4620, -0.1150, neighborhood)
+            neighborhood.contains("Kensington", ignoreCase = true) -> setCoordinates(51.5010, -0.1930, neighborhood)
+            else -> {
+                currentLocation.update {
+                    it.copy(
+                        neighborhood = neighborhood,
+                        radiusDescription = "${radiusKm} km radius"
+                    )
+                }
+            }
         }
     }
 
     override suspend fun dismissKarmaPrompt(promptId: String) {
         dismissedPromptId.value = promptId
+    }
+
+    override suspend fun clearAllData(wipeServerDb: Boolean): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                // 1. Clear local Room database tables
+                database?.clearAllTables()
+
+                // 2. Clear Session & Auth
+                AppSessionManager.logout()
+
+                // 3. Clear in-memory flows
+                recentSearches.value = emptyList()
+                submissionHistory.value = emptyList()
+                pendingOfflineCount.value = 0
+                queuedSubmissionsState.value = emptyList()
+
+                // 4. Optionally trigger server database reset
+                if (wipeServerDb) {
+                    try {
+                        api.service.resetDatabase(
+                            mapOf(
+                                "wipe_stores" to true,
+                                "lat" to currentLat,
+                                "lon" to currentLon,
+                                "area_name" to currentLocation.value.neighborhood
+                            )
+                        )
+                    } catch (_: Exception) {}
+                }
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
     }
 
     override fun getActiveYellowStickers(): Flow<List<com.example.feature.yellowsticker.YellowStickerItem>> = flow {

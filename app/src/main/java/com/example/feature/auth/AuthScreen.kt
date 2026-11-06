@@ -56,11 +56,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -70,7 +73,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
+import com.example.core.auth.GoogleAuthManager
 import com.example.ui.theme.spacing
+import kotlinx.coroutines.launch
 
 /**
  * Stateful entry composable for the Authentication & Onboarding screen.
@@ -83,6 +88,9 @@ fun AuthScreen(
     viewModel: AuthViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val googleAuthManager = remember { GoogleAuthManager(context) }
 
     LaunchedEffect(uiState.step) {
         if (uiState.step == AuthStep.SUCCESS) {
@@ -92,7 +100,25 @@ fun AuthScreen(
 
     AuthContent(
         uiState = uiState,
-        onEvent = viewModel::onEvent,
+        onEvent = { event ->
+            if (event is AuthUiEvent.OnGoogleSignInClicked) {
+                coroutineScope.launch {
+                    when (val result = googleAuthManager.signInWithGoogle(context)) {
+                        is GoogleAuthManager.AuthResult.Success -> {
+                            viewModel.handleGoogleSignInResult(result.data)
+                        }
+                        is GoogleAuthManager.AuthResult.Error -> {
+                            viewModel.handleGoogleSignInError(result.throwable)
+                        }
+                        is GoogleAuthManager.AuthResult.Cancelled -> {
+                            // User dismissed account picker, do nothing
+                        }
+                    }
+                }
+            } else {
+                viewModel.onEvent(event)
+            }
+        },
         onNavigateBack = onNavigateBack,
         modifier = modifier
     )
