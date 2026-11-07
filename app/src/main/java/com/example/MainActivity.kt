@@ -86,6 +86,8 @@ import com.example.feature.trolley.TrolleyEarScreen
 
 import com.example.feature.yellowsticker.YellowStickerScreen
 
+import com.example.feature.copilot.PriceCopilotScreen
+
 import com.example.ui.theme.PriceBridgeTheme
 
 /**
@@ -123,6 +125,8 @@ object Routes {
     const val YELLOW_STICKERS = "yellow_stickers"
 
     const val BOUNTIES = "bounties"
+
+    const val COPILOT = "copilot"
 
     fun productDetail(productId: String) = "product/$productId"
 
@@ -313,6 +317,12 @@ fun PriceBridgeNavHost(
                 onNavigateToBounties = {
 
                     navController.navigate(Routes.BOUNTIES)
+
+                },
+
+                onNavigateToCopilot = {
+
+                    navController.navigate(Routes.COPILOT)
 
                 }
 
@@ -779,6 +789,22 @@ fun PriceBridgeNavHost(
         composable(Routes.BOUNTIES) {
 
             BountyRadarScreen(onNavigateBack = { navController.popBackStack() })
+
+        }
+
+        // ── Enterprise AI Shopping Copilot ──
+
+        composable(Routes.COPILOT) {
+
+            PriceCopilotScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToProduct = { productId ->
+                    navController.navigate(Routes.productDetail(productId))
+                },
+                onNavigateToStore = { storeId ->
+                    navController.navigate(Routes.storeDetail(storeId))
+                }
+            )
 
         }
 

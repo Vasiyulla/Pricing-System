@@ -12,15 +12,20 @@ data class ScanUiState(
     val isTorchOn: Boolean = false,
     val isScanning: Boolean = true,
     val isSearching: Boolean = false,
+    val isCameraPermissionGranted: Boolean = false,
+    val isProcessingOcr: Boolean = false,
 
     // Photo capture & price reporting state
     val capturedPhotoUri: String? = null,
+    val rawOcrText: String? = null,
     val productNameInput: String = "",
     val storeNameInput: String = "More Supermarket, Indiranagar",
     val priceInput: String = "",
     val mrpInput: String = "",
     val unitInput: String = "1 L",
     val evidenceType: String = "Shelf Tag",
+    val ocrConfidenceScore: Int? = null,
+    val isOcrDetected: Boolean = false,
     val isSubmittingPrice: Boolean = false,
     val isSubmitSuccess: Boolean = false,
     val nearbyStoreSuggestions: List<String> = listOf(
@@ -51,9 +56,10 @@ sealed interface ScanUiEvent {
     data object OnBackClicked : ScanUiEvent
     data object OnToggleTorch : ScanUiEvent
     data class OnChangeCaptureMode(val mode: CaptureMode) : ScanUiEvent
+    data class OnCameraPermissionResult(val isGranted: Boolean) : ScanUiEvent
 
     // Photo Capture & Form Events
-    data class OnPhotoCaptured(val photoUri: String = "captured_product_photo") : ScanUiEvent
+    data class OnPhotoCaptured(val photoUri: String = "captured_product_photo", val bitmap: android.graphics.Bitmap? = null) : ScanUiEvent
     data object OnRetakePhoto : ScanUiEvent
     data class OnProductNameChanged(val name: String) : ScanUiEvent
     data class OnStoreNameChanged(val store: String) : ScanUiEvent

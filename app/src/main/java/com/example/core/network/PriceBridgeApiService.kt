@@ -102,6 +102,16 @@ interface PriceBridgeApiService {
         @Body payload: Map<String, String>
     ): NetworkUserSession
 
+    @POST("api/v1/auth/sign-in")
+    suspend fun signInWithEmail(
+        @Body payload: Map<String, String>
+    ): NetworkUserSession
+
+    @POST("api/v1/auth/sign-up")
+    suspend fun signUpWithEmail(
+        @Body payload: Map<String, String>
+    ): NetworkUserSession
+
     @POST("api/v1/admin/db/reset")
     suspend fun resetDatabase(
         @Body payload: Map<String, @JvmSuppressWildcards Any> = emptyMap()

@@ -79,9 +79,11 @@ class NetworkPriceBridgeRepository(
 
     private val currentLocation = MutableStateFlow(
         LocationInfo(
+            title = "Current Location",
             neighborhood = "Detecting Live Location...",
             addressLine = "Real-time GPS",
-            radiusDescription = "1.5 km radius",
+            latitude = 0.0,
+            longitude = 0.0,
             isLiveTrackingActive = true
         )
     )
@@ -757,16 +759,6 @@ class NetworkPriceBridgeRepository(
 
     override fun isUserLoggedIn(): Flow<Boolean> = AppSessionManager.isLoggedIn
 
-    override suspend fun loginWithPhone(phoneNumber: String, otp: String): Boolean {
-        AppSessionManager.setLoggedIn(
-            loggedIn = true,
-            mode = "PHONE",
-            email = "scout@pricebridge.org",
-            name = "UK Mobile User"
-        )
-        return true
-    }
-
     override suspend fun loginWithGoogle(
         idToken: String?,
         email: String?,
@@ -798,6 +790,36 @@ class NetworkPriceBridgeRepository(
             )
             true
         }
+    }
+
+    override suspend fun signInWithEmail(email: String, password: String): Boolean {
+        val session = api.service.signInWithEmail(
+            mapOf("email" to email.trim(), "password" to password)
+        )
+        AppSessionManager.setLoggedIn(
+            loggedIn = true,
+            mode = "NEON_EMAIL",
+            email = session.email,
+            name = session.displayName,
+            avatarUrl = session.avatarUrl,
+            token = session.token
+        )
+        return true
+    }
+
+    override suspend fun signUpWithEmail(name: String, email: String, password: String): Boolean {
+        val session = api.service.signUpWithEmail(
+            mapOf("name" to name.trim(), "email" to email.trim(), "password" to password)
+        )
+        AppSessionManager.setLoggedIn(
+            loggedIn = true,
+            mode = "NEON_EMAIL",
+            email = session.email,
+            name = session.displayName,
+            avatarUrl = session.avatarUrl,
+            token = session.token
+        )
+        return true
     }
 
     override suspend fun loginAsGuest() {
@@ -858,13 +880,10 @@ class NetworkPriceBridgeRepository(
         }
     }
 
-    override suspend fun updateLocation(neighborhood: String, radiusKm: Double) {
-        currentLocation.update {
-            it.copy(
-                neighborhood = if (neighborhood.isNotBlank()) neighborhood else it.neighborhood,
-                radiusDescription = "${radiusKm} km radius"
-            )
-        }
+    override suspend fun updateLocation(location: LocationInfo) {
+        currentLocation.value = location
+        currentLat = location.latitude
+        currentLon = location.longitude
     }
 
     override suspend fun dismissKarmaPrompt(promptId: String) {
@@ -1000,6 +1019,9 @@ class NetworkPriceBridgeRepository(
             name = this.name,
             address = "${this.address}, ${this.postcode}",
             distanceFormatted = dist,
+            latitude = this.latitude,
+            longitude = this.longitude,
+            distanceKm = this.distanceKm ?: 1.0,
             isOpen = true,
             operatingHours = "7:00 AM - 11:00 PM",
             phone = null,

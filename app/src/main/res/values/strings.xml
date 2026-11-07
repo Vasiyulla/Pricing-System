@@ -199,17 +199,8 @@
     <!-- Auth & Onboarding Flow (Plan Sprint 3 & Section 9) -->
     <string name="auth_title">Welcome to Price Bridge</string>
     <string name="auth_subtitle">Never overpay at local stores. Discover verified crowdsourced prices nearby.</string>
-    <string name="auth_phone_label">Mobile Number</string>
-    <string name="auth_phone_placeholder">10-digit mobile number</string>
-    <string name="auth_btn_send_otp">Get OTP</string>
-    <string name="auth_otp_title">Verify Mobile</string>
-    <string name="auth_otp_subtitle">Enter 6-digit code sent to +91 %1$s</string>
-    <string name="auth_btn_verify_otp">Verify &amp; Continue</string>
-    <string name="auth_btn_resend_otp">Resend OTP</string>
-    <string name="auth_or_divider">OR</string>
     <string name="auth_btn_google">Continue with Google</string>
     <string name="auth_btn_guest">Explore prices as guest</string>
-    <string name="auth_demo_chip">Demo: +91 98765 43210</string>
 
     <!-- DPDP Consent (Plan Section 9 & DPDP Act 2023) -->
     <string name="dpdp_consent_title">DPDP Privacy &amp; Trust Notice</string>

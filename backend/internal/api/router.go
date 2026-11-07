@@ -28,6 +28,10 @@ func NewRouter(h *APIHandler) *chi.Mux {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
+	// Cybersecurity Hardening: Enforce 10MB global body limit and IP rate limiting (60 req burst, 10/sec refill)
+	r.Use(MaxBodySizeMiddleware(10 * 1024 * 1024))
+	r.Use(RateLimitMiddleware(60, 10))
+
 	// Cross-Origin Resource Sharing (CORS)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
@@ -49,7 +53,7 @@ func NewRouter(h *APIHandler) *chi.Mux {
 			r.Get("/verify", h.VerifyStore)
 			r.Post("/verify", h.VerifyStore)
 			r.Get("/{id}", h.GetStoreByID)
-			r.Post("/{id}/report-discrepancy", h.ReportStoreDiscrepancy)
+			r.With(RequireAuth).Post("/{id}/report-discrepancy", h.ReportStoreDiscrepancy)
 		})
 
 		// Products & Barcodes
@@ -62,25 +66,27 @@ func NewRouter(h *APIHandler) *chi.Mux {
 			r.Get("/{id}/trolley-whisper", h.GetTrolleyWhisper)
 		})
 
-		// Authentication (Google & Phone)
+		// Authentication (Neon PostgreSQL Auth & Google)
 		r.Route("/auth", func(r chi.Router) {
+			r.Post("/sign-in", h.NeonEmailSignIn)
+			r.Post("/sign-up", h.NeonEmailSignUp)
 			r.Post("/google", h.GoogleAuth)
 		})
 
-		// Price Submissions & Outbox
+		// Price Submissions & Outbox (Protected by Session Auth)
 		r.Route("/prices", func(r chi.Router) {
-			r.Post("/submit", h.SubmitPrice)
-			r.Post("/batch-sync", h.BatchSyncPrices)
+			r.With(RequireAuth).Post("/submit", h.SubmitPrice)
+			r.With(RequireAuth).Post("/batch-sync", h.BatchSyncPrices)
 		})
 
 		// 2-Stop Pareto Basket Optimizer
 		r.Post("/basket/optimize", h.OptimizeBasket)
 
-		// AI Bounty Hunter
+		// AI Bounty Hunter (Claims require authentication)
 		r.Route("/bounties", func(r chi.Router) {
 			r.Get("/nearby", h.GetNearbyBounties)
 			r.Get("/prompt", h.GetActiveBountyPrompt)
-			r.Post("/{id}/claim", h.ClaimBounty)
+			r.With(RequireAuth).Post("/{id}/claim", h.ClaimBounty)
 		})
 
 		// Categories
@@ -89,8 +95,9 @@ func NewRouter(h *APIHandler) *chi.Mux {
 		// Yellow Sticker Deals
 		r.Get("/yellow-stickers/active", h.GetActiveYellowStickers)
 
-		// AI Multimodal Ingestion (Receipts & Stickers)
+		// AI Multimodal Ingestion (Receipts & Stickers) with 20MB limit for high-res images
 		r.Route("/ai", func(r chi.Router) {
+			r.Use(MaxBodySizeMiddleware(20 * 1024 * 1024))
 			r.Post("/receipt-scan", h.ScanReceiptAI)
 			r.Post("/yellow-sticker-scan", h.ScanYellowStickerAI)
 		})

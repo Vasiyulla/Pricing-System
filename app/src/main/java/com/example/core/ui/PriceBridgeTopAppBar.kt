@@ -98,7 +98,7 @@ fun PriceBridgeTopAppBar(
 
                 Spacer(modifier = Modifier.width(MaterialTheme.spacing.spaceSm))
 
-                // Location details clickable target
+                // Location details clickable target (Blinkit / Zomato exact location presentation)
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -107,7 +107,7 @@ fun PriceBridgeTopAppBar(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = location.neighborhood,
+                            text = if (location.title.isNotBlank()) location.title else location.neighborhood,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -121,32 +121,10 @@ fun PriceBridgeTopAppBar(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
-                    }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 2.dp)
-                    ) {
-                        // Radius Tag
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    MaterialTheme.colorScheme.secondaryContainer,
-                                    RoundedCornerShape(4.dp)
-                                )
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = location.radiusDescription,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
+                        Spacer(modifier = Modifier.width(6.dp))
 
-                        Spacer(modifier = Modifier.width(MaterialTheme.spacing.spaceSm))
-
-                        // Live pulse dot
+                        // Live pulse indicator
                         val infiniteTransition = rememberInfiniteTransition(label = "pulse")
                         val alpha by infiniteTransition.animateFloat(
                             initialValue = 0.4f,
@@ -164,13 +142,17 @@ fun PriceBridgeTopAppBar(
                                 .alpha(alpha)
                                 .background(Color(0xFF10B981), CircleShape)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = stringResource(R.string.live_prices_indicator),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
+
+                    // Exact Address Line snippet (Blinkit / Zomato style)
+                    Text(
+                        text = if (location.addressLine.isNotBlank()) location.addressLine else location.neighborhood,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
                 }
 
                 // Notification Bell Button

@@ -81,13 +81,14 @@ interface PriceBridgeRepository {
     fun getUserProfile(): Flow<UserProfile>
     fun getSubmissionHistory(): Flow<List<PriceSubmission>>
     fun isUserLoggedIn(): Flow<Boolean>
-    suspend fun loginWithPhone(phoneNumber: String, otp: String): Boolean
     suspend fun loginWithGoogle(
         idToken: String? = null,
         email: String? = null,
         displayName: String? = null,
         photoUrl: String? = null
     ): Boolean
+    suspend fun signInWithEmail(email: String, password: String): Boolean
+    suspend fun signUpWithEmail(name: String, email: String, password: String): Boolean
     suspend fun loginAsGuest()
     suspend fun logout()
     fun getAvailableProfiles(): Flow<List<UserProfile>>
@@ -116,7 +117,7 @@ interface PriceBridgeRepository {
     suspend fun claimBounty(bountyId: String): Boolean
 
     // ── Settings ──
-    suspend fun updateLocation(neighborhood: String, radiusKm: Double)
+    suspend fun updateLocation(location: LocationInfo)
     suspend fun dismissKarmaPrompt(promptId: String)
     suspend fun clearAllData(wipeServerDb: Boolean = false): Boolean
 }

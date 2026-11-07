@@ -33,9 +33,11 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
 
     private val currentLocation = MutableStateFlow(
         LocationInfo(
+            title = "Current Location",
             neighborhood = "Detecting Live Location...",
             addressLine = "Real-time GPS",
-            radiusDescription = "1.5 km radius",
+            latitude = 0.0,
+            longitude = 0.0,
             isLiveTrackingActive = true
         )
     )
@@ -1158,16 +1160,6 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
     override fun getSubmissionHistory(): Flow<List<PriceSubmission>> = submissionHistory.asStateFlow()
     override fun isUserLoggedIn(): Flow<Boolean> = isLoggedInState.asStateFlow()
 
-    override suspend fun loginWithPhone(phoneNumber: String, otp: String): Boolean {
-        kotlinx.coroutines.delay(600)
-        isLoggedInState.value = true
-        userProfile.value = userProfile.value.copy(
-            phoneNumber = phoneNumber,
-            isGuest = false
-        )
-        return true
-    }
-
     override suspend fun loginWithGoogle(
         idToken: String?,
         email: String?,
@@ -1179,6 +1171,28 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
         userProfile.value = userProfile.value.copy(
             displayName = displayName ?: "Priya Sharma",
             email = email ?: "priya.sharma@gmail.com",
+            isGuest = false
+        )
+        return true
+    }
+
+    override suspend fun signInWithEmail(email: String, password: String): Boolean {
+        kotlinx.coroutines.delay(400)
+        isLoggedInState.value = true
+        userProfile.value = userProfile.value.copy(
+            displayName = email.substringBefore("@"),
+            email = email,
+            isGuest = false
+        )
+        return true
+    }
+
+    override suspend fun signUpWithEmail(name: String, email: String, password: String): Boolean {
+        kotlinx.coroutines.delay(400)
+        isLoggedInState.value = true
+        userProfile.value = userProfile.value.copy(
+            displayName = name.ifBlank { email.substringBefore("@") },
+            email = email,
             isGuest = false
         )
         return true
@@ -1330,13 +1344,8 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
     }
 
     // ── Settings ──
-    override suspend fun updateLocation(neighborhood: String, radiusKm: Double) {
-        currentLocation.value = LocationInfo(
-            neighborhood = neighborhood,
-            addressLine = "Real-time GPS",
-            radiusDescription = "$radiusKm km radius",
-            isLiveTrackingActive = true
-        )
+    override suspend fun updateLocation(location: LocationInfo) {
+        currentLocation.value = location
     }
 
     override suspend fun dismissKarmaPrompt(promptId: String) {

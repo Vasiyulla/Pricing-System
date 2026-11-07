@@ -32,19 +32,13 @@ type ResetResponse struct {
 }
 
 // CheckAdminAuthorization verifies admin authentication via Bearer token or X-Admin-Secret header.
-// It checks against os.Getenv("ADMIN_SECRET"). If unset in production, it denies access (HTTP 403).
-// If unset in non-production, it requires default secret "dev_admin_secret" to prevent accidental wipes.
+// It strictly requires ADMIN_SECRET to be configured in the environment.
+// Hardcoded fallbacks are completely removed to prevent unauthorized wipes.
 func CheckAdminAuthorization(r *http.Request) (bool, int, string) {
 	adminSecret := strings.TrimSpace(os.Getenv("ADMIN_SECRET"))
-	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
 
-	if appEnv == "production" && adminSecret == "" {
-		return false, http.StatusForbidden, "Admin operations are strictly disabled in production when ADMIN_SECRET is not configured"
-	}
-
-	// Fallback secret for local development / testing when ADMIN_SECRET is not explicitly set
 	if adminSecret == "" {
-		adminSecret = "dev_admin_secret"
+		return false, http.StatusForbidden, "Admin database operations are strictly disabled when ADMIN_SECRET is not configured in the server environment"
 	}
 
 	token := extractAdminToken(r)

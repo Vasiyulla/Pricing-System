@@ -19,17 +19,29 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Verified
+import com.example.core.model.SavedAddress
+import com.example.core.session.AppSessionManager
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -116,6 +128,7 @@ fun HomeScreen(
     onNavigateToTwoStopBasket: () -> Unit = {},
     onNavigateToYellowStickers: () -> Unit = {},
     onNavigateToBounties: () -> Unit = {},
+    onNavigateToCopilot: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel()
 ) {
@@ -153,6 +166,7 @@ fun HomeScreen(
         onNavigateToTwoStopBasket = onNavigateToTwoStopBasket,
         onNavigateToYellowStickers = onNavigateToYellowStickers,
         onNavigateToBounties = onNavigateToBounties,
+        onNavigateToCopilot = onNavigateToCopilot,
         modifier = modifier
     )
 }
@@ -171,6 +185,7 @@ fun HomeContent(
     onNavigateToTwoStopBasket: () -> Unit = {},
     onNavigateToYellowStickers: () -> Unit = {},
     onNavigateToBounties: () -> Unit = {},
+    onNavigateToCopilot: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -318,6 +333,107 @@ fun HomeContent(
                                         }
                                     }
                                 )
+                            }
+                        }
+
+                        // ── Enterprise AI Commerce Suite Card ──
+                        item(key = "enterprise_ai_hub_card") {
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = MaterialTheme.spacing.spaceMd)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(32.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.primary),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.AutoAwesome,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                            Column {
+                                                Text(
+                                                    text = "Price Bridge AI Copilot",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "Grounded real-time price intelligence",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        Button(
+                                            onClick = onNavigateToCopilot,
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                        ) {
+                                            Text("Ask AI", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    // Quick AI Mode Chips
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Surface(
+                                            onClick = onNavigateToTrolleyEar,
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.surface,
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Text("🎧 In-Store Audio", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                                            }
+                                        }
+
+                                        Surface(
+                                            onClick = onNavigateToTwoStopBasket,
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.surface,
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Text("⚡ 2-Stop Split", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -470,8 +586,8 @@ fun HomeContent(
         ) {
             LocationSelectionSheetContent(
                 currentLocation = uiState.location,
-                onSelectLocation = { neighborhood, radius ->
-                    onEvent(HomeUiEvent.OnChangeLocation(neighborhood, radius))
+                onSelectLocation = { locationInfo ->
+                    onEvent(HomeUiEvent.OnChangeLocation(locationInfo))
                 }
             )
         }
@@ -511,20 +627,27 @@ fun HomeContent(
 @Composable
 private fun LocationSelectionSheetContent(
     currentLocation: LocationInfo,
-    onSelectLocation: (String, Double) -> Unit
+    onSelectLocation: (LocationInfo) -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val locManager = remember { DeviceLocationManager(context) }
 
-    var isDetecting by remember { mutableStateOf(false) }
-    var activeNeighborhood by remember { mutableStateOf(currentLocation.neighborhood) }
-    var activeCoords by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    var activeAccuracy by remember { mutableStateOf<Float?>(null) }
-    var selectedRadius by remember { mutableStateOf(1.5) }
-    var isManualEditOpen by remember { mutableStateOf(false) }
-    var manualLocationText by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchResults by remember { mutableStateOf<List<SavedAddress>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
+
+    var isGpsDetecting by remember { mutableStateOf(false) }
     var locationError by remember { mutableStateOf<String?>(null) }
+
+    // Saved addresses from AppSessionManager
+    var savedAddresses by remember { mutableStateOf<List<SavedAddress>>(AppSessionManager.getSavedAddresses()) }
+
+    // Add Address Form toggle & states
+    var isAddAddressOpen by remember { mutableStateOf(false) }
+    var flatHouseText by remember { mutableStateOf("") }
+    var areaStreetText by remember { mutableStateOf("") }
+    var selectedLabelType by remember { mutableStateOf("Home") } // "Home", "Work", "Other"
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -532,32 +655,39 @@ private fun LocationSelectionSheetContent(
         val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (granted) {
-            isDetecting = true
+            isGpsDetecting = true
             locationError = null
             coroutineScope.launch {
                 val geo = locManager.getAccurateLocation(highAccuracy = true)
                 withContext(Dispatchers.Main) {
-                    isDetecting = false
+                    isGpsDetecting = false
                     if (geo.latitude != 0.0 || geo.longitude != 0.0) {
-                        activeNeighborhood = geo.areaName
-                        activeCoords = Pair(geo.latitude, geo.longitude)
-                        activeAccuracy = geo.accuracyMeters
+                        val (locality, fullAddr) = locManager.resolveFullAddress(geo.latitude, geo.longitude)
                         (PriceBridgeRepositoryProvider.repository as? NetworkPriceBridgeRepository)?.setCoordinates(
                             lat = geo.latitude,
                             lon = geo.longitude,
-                            neighborhood = geo.areaName
+                            neighborhood = locality
                         )
+                        val chosenLoc = LocationInfo(
+                            title = "Current Location",
+                            neighborhood = locality,
+                            addressLine = fullAddr,
+                            latitude = geo.latitude,
+                            longitude = geo.longitude,
+                            isLiveTrackingActive = true
+                        )
+                        onSelectLocation(chosenLoc)
                     } else {
-                        locationError = "Unable to acquire GPS fix. Please ensure device location is enabled."
+                        locationError = "Unable to acquire GPS fix. Please ensure location services are turned on."
                     }
                 }
             }
         } else {
-            locationError = "Location permission denied. You can enter your neighborhood manually below."
+            locationError = "Location permission denied. You can search or select a saved address below."
         }
     }
 
-    val requestGps: () -> Unit = {
+    val requestCurrentGps: () -> Unit = {
         if (!locManager.hasLocationPermission()) {
             permissionLauncher.launch(
                 arrayOf(
@@ -566,59 +696,75 @@ private fun LocationSelectionSheetContent(
                 )
             )
         } else {
-            isDetecting = true
+            isGpsDetecting = true
             locationError = null
             coroutineScope.launch {
                 val geo = locManager.getAccurateLocation(highAccuracy = true)
                 withContext(Dispatchers.Main) {
-                    isDetecting = false
+                    isGpsDetecting = false
                     if (geo.latitude != 0.0 || geo.longitude != 0.0) {
-                        activeNeighborhood = geo.areaName
-                        activeCoords = Pair(geo.latitude, geo.longitude)
-                        activeAccuracy = geo.accuracyMeters
+                        val (locality, fullAddr) = locManager.resolveFullAddress(geo.latitude, geo.longitude)
                         (PriceBridgeRepositoryProvider.repository as? NetworkPriceBridgeRepository)?.setCoordinates(
                             lat = geo.latitude,
                             lon = geo.longitude,
-                            neighborhood = geo.areaName
+                            neighborhood = locality
                         )
+                        val chosenLoc = LocationInfo(
+                            title = "Current Location",
+                            neighborhood = locality,
+                            addressLine = fullAddr,
+                            latitude = geo.latitude,
+                            longitude = geo.longitude,
+                            isLiveTrackingActive = true
+                        )
+                        onSelectLocation(chosenLoc)
                     } else {
-                        locationError = "Unable to acquire GPS fix. Please ensure device location is enabled."
+                        locationError = "Unable to acquire GPS fix. Please ensure location services are turned on."
                     }
                 }
             }
         }
     }
 
-    // Trigger initial detection if still default/empty
-    LaunchedEffect(Unit) {
-        if (activeNeighborhood.contains("Detecting") || activeNeighborhood.isBlank()) {
-            requestGps()
+    // Debounced search when query changes
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.trim().length >= 3) {
+            isSearching = true
+            withContext(Dispatchers.IO) {
+                val results = locManager.searchAddresses(searchQuery.trim(), maxResults = 5)
+                withContext(Dispatchers.Main) {
+                    searchResults = results
+                    isSearching = false
+                }
+            }
+        } else {
+            searchResults = emptyList()
+            isSearching = false
         }
     }
-
-    val radii = listOf(1.0, 1.5, 3.0, 5.0, 10.0)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
             .padding(bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
+        // Blinkit / Zomato Header
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(42.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.NearMe,
+                    imageVector = Icons.Default.Place,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(24.dp)
@@ -626,104 +772,127 @@ private fun LocationSelectionSheetContent(
             }
             Column {
                 Text(
-                    text = "Live Device Location",
-                    style = MaterialTheme.typography.titleLarge,
+                    text = "Select Delivery & Shopping Location",
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Real-time GPS pinpoints nearby stores anywhere you are",
+                    text = "Prices & store availability are personalized to your exact address",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        // Live GPS Card
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
-            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(if (isDetecting) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary)
-                        )
-                        Text(
-                            text = if (isDetecting) "Acquiring Real-Time GPS…" else "Real-Time GPS Active",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    if (isDetecting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-
-                // Neighborhood / Locality Name
-                Text(
-                    text = activeNeighborhood,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+        // Live Search Bar (Area, Street, Apartment)
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = {
+                Text("Search area, street name, apartment...", style = MaterialTheme.typography.bodyMedium)
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Search",
+                    tint = MaterialTheme.colorScheme.primary
                 )
-
-                // Coordinates & Accuracy
-                val coordsText = if (activeCoords != null && (activeCoords!!.first != 0.0 || activeCoords!!.second != 0.0)) {
-                    val acc = activeAccuracy?.let { " • ±${it.toInt()}m accuracy" } ?: ""
-                    "Lat: %.4f, Lon: %.4f%s".format(activeCoords!!.first, activeCoords!!.second, acc)
-                } else {
-                    "Hardware GPS sensor enabled • Auto-resolves locality"
-                }
-
-                Text(
-                    text = coordsText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                // Refresh / Detect Button
-                OutlinedButton(
-                    onClick = { requestGps() },
-                    shape = RoundedCornerShape(10.dp),
-                    enabled = !isDetecting,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(42.dp)
-                ) {
+            },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
                     Icon(
-                        imageVector = Icons.Default.NearMe,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Clear",
+                        modifier = Modifier
+                            .clickable { searchQuery = "" }
+                            .padding(8.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isDetecting) "Locating Device…" else "Refresh Live GPS Location",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // Show search results if user searched
+        if (isSearching) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("Searching locations…", style = MaterialTheme.typography.bodySmall)
+            }
+        } else if (searchResults.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "SEARCH RESULTS",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+                searchResults.forEach { item ->
+                    Surface(
+                        onClick = {
+                            val chosen = LocationInfo(
+                                title = item.label,
+                                neighborhood = item.locality,
+                                addressLine = item.addressLine,
+                                latitude = item.latitude,
+                                longitude = item.longitude,
+                                isLiveTrackingActive = false
+                            )
+                            (PriceBridgeRepositoryProvider.repository as? NetworkPriceBridgeRepository)?.setCoordinates(
+                                lat = item.latitude,
+                                lon = item.longitude,
+                                neighborhood = item.locality
+                            )
+                            onSelectLocation(chosen)
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color.Transparent,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = item.addressLine,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -738,109 +907,311 @@ private fun LocationSelectionSheetContent(
             )
         }
 
-        // Manual Location Fallback Toggle
-        if (!isManualEditOpen) {
-            TextButton(
-                onClick = { isManualEditOpen = true },
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+        // "Use Current Location" (GPS) Card — 1-Tap pinpointing
+        Surface(
+            onClick = { requestCurrentGps() },
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text(
-                    text = "Enter locality manually instead",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isGpsDetecting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.MyLocation,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Use Current Location",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = if (isGpsDetecting) "Pinpointing exact building via GPS…" else "Auto-detect accurate location using device GPS",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        }
+
+        // Saved Addresses Section (Home, Work, Other)
+        if (savedAddresses.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "Custom Locality or Landmark",
+                    text = "SAVED ADDRESSES",
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.outline
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = manualLocationText,
-                        onValueChange = { manualLocationText = it },
-                        placeholder = { Text("e.g. Indiranagar, Koramangala", style = MaterialTheme.typography.bodySmall) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Button(
+
+                savedAddresses.forEach { addr ->
+                    val isCurrentSelected = currentLocation.title == addr.label ||
+                            currentLocation.addressLine == addr.addressLine
+                    Surface(
                         onClick = {
-                            if (manualLocationText.isNotBlank()) {
-                                activeNeighborhood = manualLocationText.trim()
-                                isManualEditOpen = false
-                            }
+                            val chosen = LocationInfo(
+                                title = addr.label,
+                                neighborhood = addr.locality,
+                                addressLine = addr.addressLine,
+                                latitude = addr.latitude,
+                                longitude = addr.longitude,
+                                isLiveTrackingActive = false
+                            )
+                            (PriceBridgeRepositoryProvider.repository as? NetworkPriceBridgeRepository)?.setCoordinates(
+                                lat = addr.latitude,
+                                lon = addr.longitude,
+                                neighborhood = addr.locality
+                            )
+                            onSelectLocation(chosen)
                         },
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = manualLocationText.isNotBlank()
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isCurrentSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isCurrentSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Set")
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            val addrIcon = when (addr.label.lowercase()) {
+                                "home" -> Icons.Default.Home
+                                "work", "office" -> Icons.Default.Business
+                                else -> Icons.Default.Place
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isCurrentSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = addrIcon,
+                                    contentDescription = null,
+                                    tint = if (isCurrentSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = addr.label,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (isCurrentSelected) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = addr.addressLine,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = addr.locality,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // Shopping Radius Selector
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "Shopping Radius",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.outline
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // "+ Add Address Details" Expandable Form
+        if (!isAddAddressOpen) {
+            OutlinedButton(
+                onClick = { isAddAddressOpen = true },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "+ Add New Address Details",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        } else {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                radii.forEach { radius ->
-                    val isSelected = selectedRadius == radius
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { selectedRadius = radius }
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${radius} km",
+                            text = "Add Exact Address Details",
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            modifier = Modifier
+                                .clickable { isAddAddressOpen = false }
+                                .padding(4.dp)
+                        )
+                    }
+
+                    // House / Flat / Floor No.
+                    OutlinedTextField(
+                        value = flatHouseText,
+                        onValueChange = { flatHouseText = it },
+                        label = { Text("House / Flat / Floor No.") },
+                        placeholder = { Text("e.g. Flat 304, Tower B") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Area / Street / Landmark
+                    OutlinedTextField(
+                        value = areaStreetText,
+                        onValueChange = { areaStreetText = it },
+                        label = { Text("Area / Street / Landmark") },
+                        placeholder = { Text("e.g. 12th Main Road, Indiranagar") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Address Label chips: Home, Work, Other
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        listOf("Home", "Work", "Other").forEach { label ->
+                            val isSelected = selectedLabelType == label
+                            Surface(
+                                onClick = { selectedLabelType = label },
+                                shape = RoundedCornerShape(20.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                )
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Save & Apply Button
+                    Button(
+                        onClick = {
+                            if (areaStreetText.isNotBlank()) {
+                                val fullLine = if (flatHouseText.isNotBlank()) "${flatHouseText.trim()}, ${areaStreetText.trim()}" else areaStreetText.trim()
+                                val newAddr = SavedAddress(
+                                    label = selectedLabelType,
+                                    addressLine = fullLine,
+                                    locality = areaStreetText.trim(),
+                                    latitude = if (currentLocation.latitude != 0.0) currentLocation.latitude else 12.9716,
+                                    longitude = if (currentLocation.longitude != 0.0) currentLocation.longitude else 77.5946
+                                )
+                                AppSessionManager.saveAddress(newAddr)
+                                savedAddresses = AppSessionManager.getSavedAddresses()
+                                isAddAddressOpen = false
+
+                                val chosen = LocationInfo(
+                                    title = newAddr.label,
+                                    neighborhood = newAddr.locality,
+                                    addressLine = newAddr.addressLine,
+                                    latitude = newAddr.latitude,
+                                    longitude = newAddr.longitude,
+                                    isLiveTrackingActive = false
+                                )
+                                (PriceBridgeRepositoryProvider.repository as? NetworkPriceBridgeRepository)?.setCoordinates(
+                                    lat = newAddr.latitude,
+                                    lon = newAddr.longitude,
+                                    neighborhood = newAddr.locality
+                                )
+                                onSelectLocation(chosen)
+                            }
+                        },
+                        enabled = areaStreetText.isNotBlank(),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Text(
+                            text = "Save Address & See Nearby Prices",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Button(
-            onClick = { onSelectLocation(activeNeighborhood, selectedRadius) },
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .testTag("btn_confirm_location")
-        ) {
-            Text(
-                text = "Apply Live Location & Refresh Prices",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
         }
     }
 }

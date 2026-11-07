@@ -15,9 +15,11 @@ data class HomeUiState(
     val isOffline: Boolean = false,
     val errorMessage: String? = null,
     val location: LocationInfo = LocationInfo(
+        title = "Current Location",
         neighborhood = "Detecting Live Location...",
         addressLine = "Real-time GPS",
-        radiusDescription = "1.5 km radius",
+        latitude = 0.0,
+        longitude = 0.0,
         isLiveTrackingActive = true
     ),
     val basketSummary: SmartBasketSummary? = null,
@@ -32,7 +34,9 @@ data class HomeUiState(
     val isOfflineQueueSheetOpen: Boolean = false,
     val isSyncingOffline: Boolean = false,
     val notifications: List<AppNotification> = emptyList(),
-    val isNotificationsSheetOpen: Boolean = false
+    val isNotificationsSheetOpen: Boolean = false,
+    val activeProximityStore: Store? = null,
+    val proximityDistanceMeters: Float? = null
 ) {
     val unreadNotificationsCount: Int get() = notifications.count { !it.isRead }
     val isEmpty: Boolean get() = !isLoading && errorMessage == null && deals.isEmpty()
@@ -55,11 +59,12 @@ sealed interface HomeUiEvent {
     data object OnMarkAllNotificationsRead : HomeUiEvent
     data object OnRetryClicked : HomeUiEvent
     data class OnBottomNavClicked(val destination: BottomBarDestination) : HomeUiEvent
-    data class OnChangeLocation(val neighborhood: String, val radiusKm: Double) : HomeUiEvent
+    data class OnChangeLocation(val location: LocationInfo) : HomeUiEvent
     data object OnDismissLocationSheet : HomeUiEvent
     data object OnSyncOfflineQueue : HomeUiEvent
     data object OnOpenOfflineQueueSheet : HomeUiEvent
     data object OnDismissOfflineQueueSheet : HomeUiEvent
     data class OnRetryQueuedSubmission(val submissionId: String) : HomeUiEvent
     data class OnCancelQueuedSubmission(val submissionId: String) : HomeUiEvent
+    data object OnDismissProximityAlert : HomeUiEvent
 }

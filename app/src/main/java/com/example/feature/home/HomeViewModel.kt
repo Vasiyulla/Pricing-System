@@ -58,7 +58,7 @@ class HomeViewModel(
             }
             is HomeUiEvent.OnChangeLocation -> {
                 viewModelScope.launch {
-                    repository.updateLocation(event.neighborhood, event.radiusKm)
+                    repository.updateLocation(event.location)
                     isLocationSheetOpenState.value = false
                     _uiState.update { it.copy(isLocationSheetOpen = false) }
                 }
@@ -91,6 +91,9 @@ class HomeViewModel(
             }
             is HomeUiEvent.OnDismissNotificationsSheet -> {
                 _uiState.update { it.copy(isNotificationsSheetOpen = false) }
+            }
+            is HomeUiEvent.OnDismissProximityAlert -> {
+                _uiState.update { it.copy(activeProximityStore = null, proximityDistanceMeters = null) }
             }
             is HomeUiEvent.OnNotificationClicked -> {
                 viewModelScope.launch {
@@ -180,6 +183,44 @@ class HomeViewModel(
             }.collect { state ->
                 _uiState.value = state
             }
+        }
+    }
+
+    /**
+     * Real-time GPS distance calculation and proximity geofencing (< 75m).
+     * Re-calculates distance to all nearby stores dynamically as user moves in real-time.
+     */
+    fun onLiveGpsLocationUpdated(lat: Double, lon: Double, accuracyMeters: Float = 0f) {
+        if (lat == 0.0 && lon == 0.0) return
+
+        val currentStores = _uiState.value.nearbyStores
+        if (currentStores.isEmpty()) return
+
+        val results = FloatArray(1)
+        val updatedStores = currentStores.map { store ->
+            android.location.Location.distanceBetween(lat, lon, store.latitude, store.longitude, results)
+            val distKm = (results[0] / 1000.0).let { Math.round(it * 100.0) / 100.0 }
+            val formattedDist = if (results[0] < 1000f) {
+                "${results[0].toInt()}m away"
+            } else {
+                String.format(java.util.Locale.US, "%.1f km away", distKm)
+            }
+            store.copy(distanceKm = distKm, distanceFormatted = formattedDist)
+        }.sortedBy { it.distanceKm }
+
+        val nearest = updatedStores.firstOrNull()
+        val proximityStore = if (nearest != null) {
+            android.location.Location.distanceBetween(lat, lon, nearest.latitude, nearest.longitude, results)
+            val meters = results[0]
+            if (meters <= 75f) Pair(nearest, meters) else null
+        } else null
+
+        _uiState.update {
+            it.copy(
+                nearbyStores = updatedStores,
+                activeProximityStore = proximityStore?.first,
+                proximityDistanceMeters = proximityStore?.second
+            )
         }
     }
 

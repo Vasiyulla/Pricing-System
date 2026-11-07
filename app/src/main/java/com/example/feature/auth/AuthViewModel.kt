@@ -2,9 +2,9 @@ package com.example.feature.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.core.data.PriceBridgeRepositoryProvider
+import com.example.core.auth.FirebaseAuthManager
 import com.example.core.data.PriceBridgeRepository
-import kotlinx.coroutines.delay
+import com.example.core.data.PriceBridgeRepositoryProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,51 +20,27 @@ class AuthViewModel(
 
     fun onEvent(event: AuthUiEvent) {
         when (event) {
-            is AuthUiEvent.OnPhoneNumberChanged -> {
-                val max = _uiState.value.selectedCountry.maxDigits
-                val cleaned = event.value.filter { it.isDigit() }.take(max)
-                _uiState.update { it.copy(phoneNumber = cleaned, errorMessage = null) }
+            is AuthUiEvent.OnNameChanged -> {
+                _uiState.update { it.copy(nameInput = event.name, errorMessage = null) }
             }
-            is AuthUiEvent.OnOtpChanged -> {
-                val cleaned = event.value.filter { it.isDigit() }.take(6)
-                _uiState.update { it.copy(otp = cleaned, errorMessage = null) }
+            is AuthUiEvent.OnEmailChanged -> {
+                _uiState.update { it.copy(emailInput = event.email, errorMessage = null) }
             }
-            is AuthUiEvent.OnUseDemoPhone -> {
-                _uiState.update { it.copy(phoneNumber = event.phone, errorMessage = null) }
+            is AuthUiEvent.OnPasswordChanged -> {
+                _uiState.update { it.copy(passwordInput = event.password, errorMessage = null) }
             }
-            is AuthUiEvent.OnFillDemoOtp -> {
-                _uiState.update { it.copy(otp = "123456", errorMessage = null) }
+            is AuthUiEvent.OnTogglePasswordVisibility -> {
+                _uiState.update { it.copy(isPasswordVisible = !it.isPasswordVisible) }
             }
-            is AuthUiEvent.OnOpenCountryPicker -> {
-                _uiState.update { it.copy(isCountryPickerOpen = true, countrySearchQuery = "") }
+            is AuthUiEvent.OnToggleAuthMode -> {
+                _uiState.update { it.copy(isSignUpMode = !it.isSignUpMode, errorMessage = null) }
             }
-            is AuthUiEvent.OnDismissCountryPicker -> {
-                _uiState.update { it.copy(isCountryPickerOpen = false, countrySearchQuery = "") }
-            }
-            is AuthUiEvent.OnSelectCountry -> {
-                _uiState.update {
-                    it.copy(
-                        selectedCountry = event.country,
-                        isCountryPickerOpen = false,
-                        countrySearchQuery = "",
-                        phoneNumber = it.phoneNumber.take(event.country.maxDigits)
-                    )
-                }
-            }
-            is AuthUiEvent.OnCountrySearchQueryChanged -> {
-                _uiState.update { it.copy(countrySearchQuery = event.query) }
-            }
-            is AuthUiEvent.OnRequestOtp -> {
-                requestOtp()
-            }
-            is AuthUiEvent.OnVerifyOtp -> {
-                verifyOtp()
-            }
-            is AuthUiEvent.OnResendOtp -> {
-                requestOtp()
+            is AuthUiEvent.OnSubmitEmailAuth -> {
+                submitEmailAuth()
             }
             is AuthUiEvent.OnGoogleSignInClicked -> {
-                loginWithGoogle()
+                // Handled in AuthScreen via FirebaseAuthManager, but triggers loading state
+                _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             }
             is AuthUiEvent.OnContinueAsGuest -> {
                 loginAsGuest()
@@ -78,82 +54,94 @@ class AuthViewModel(
             is AuthUiEvent.OnToggleConsent -> {
                 _uiState.update { it.copy(isConsentChecked = event.accepted) }
             }
-            is AuthUiEvent.OnBackToPhone -> {
-                _uiState.update { it.copy(step = AuthStep.PHONE_INPUT, otp = "", errorMessage = null) }
-            }
-
         }
     }
 
-    private fun requestOtp() {
+    private fun submitEmailAuth() {
         val state = _uiState.value
-        if (!state.isPhoneValid) {
-            _uiState.update { it.copy(errorMessage = "Please enter a valid mobile number (e.g. 07911 123456)") }
+        val email = state.emailInput.trim()
+        val password = state.passwordInput
+        val name = state.nameInput.trim()
+
+        if (email.isBlank() || !email.contains("@")) {
+            _uiState.update { it.copy(errorMessage = "Please enter a valid email address") }
             return
         }
-        if (!state.isConsentChecked) {
-            _uiState.update { it.copy(errorMessage = "Please agree to the Privacy Notice to proceed") }
+        if (password.length < 6) {
+            _uiState.update { it.copy(errorMessage = "Password must be at least 6 characters") }
+            return
+        }
+        if (state.isSignUpMode && name.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "Please enter your name") }
             return
         }
 
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
         viewModelScope.launch {
-            delay(600)
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    step = AuthStep.OTP_INPUT,
-                    otp = "123456" // Pre-fill sample OTP for convenient review
+            try {
+                if (state.isSignUpMode) {
+                    repository.signUpWithEmail(name = name, email = email, password = password)
+                } else {
+                    repository.signInWithEmail(email = email, password = password)
+                }
+                _uiState.update { it.copy(isLoading = false, step = AuthStep.SUCCESS) }
+            } catch (e: Exception) {
+                val errorMsg = e.localizedMessage ?: "Authentication failed. Please verify credentials."
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = if (errorMsg.contains("HTTP 401") || errorMsg.contains("401")) {
+                            "Invalid email or password"
+                        } else {
+                            errorMsg
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    fun handleFirebaseSignInResult(userData: FirebaseAuthManager.FirebaseUserData) {
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        viewModelScope.launch {
+            try {
+                repository.loginWithGoogle(
+                    idToken = userData.firebaseIdToken,
+                    email = userData.email,
+                    displayName = userData.displayName,
+                    photoUrl = userData.photoUrl
                 )
+                _uiState.update { it.copy(isLoading = false, step = AuthStep.SUCCESS) }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Sign-in synchronization failed: ${e.localizedMessage ?: "Unknown error"}"
+                    )
+                }
             }
-        }
-    }
-
-    private fun verifyOtp() {
-        val state = _uiState.value
-        if (!state.isOtpValid) {
-            _uiState.update { it.copy(errorMessage = "Please enter the 6-digit OTP") }
-            return
-        }
-
-        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-
-        viewModelScope.launch {
-            repository.loginWithPhone(state.phoneNumber, state.otp)
-            _uiState.update { it.copy(isLoading = false, step = AuthStep.SUCCESS) }
-        }
-    }
-
-    fun handleFirebaseSignInResult(userData: com.example.core.auth.FirebaseAuthManager.FirebaseUserData) {
-        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-        viewModelScope.launch {
-            repository.loginWithGoogle(
-                idToken = userData.firebaseIdToken,
-                email = userData.email,
-                displayName = userData.displayName,
-                photoUrl = userData.photoUrl
-            )
-            _uiState.update { it.copy(isLoading = false, step = AuthStep.SUCCESS) }
         }
     }
 
     fun handleFirebaseSignInError(error: Throwable) {
-        _uiState.update { it.copy(isLoading = false, errorMessage = "Firebase Google Sign-In failed: ${error.localizedMessage ?: "Unknown error"}") }
-    }
-
-    private fun loginWithGoogle() {
-        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-        viewModelScope.launch {
-            repository.loginWithGoogle()
-            _uiState.update { it.copy(isLoading = false, step = AuthStep.SUCCESS) }
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                errorMessage = "Google Sign-In failed: ${error.localizedMessage ?: "User cancelled or network error"}"
+            )
         }
     }
 
+    fun handleFirebaseSignInCancelled() {
+        _uiState.update { it.copy(isLoading = false, errorMessage = null) }
+    }
+
     private fun loginAsGuest() {
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
             repository.loginAsGuest()
-            _uiState.update { it.copy(step = AuthStep.SUCCESS) }
+            _uiState.update { it.copy(isLoading = false, step = AuthStep.SUCCESS) }
         }
     }
 }
