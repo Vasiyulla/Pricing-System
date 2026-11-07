@@ -299,7 +299,7 @@ fun AuthContent(
                     OutlinedTextField(
                         value = uiState.passwordInput,
                         onValueChange = { onEvent(AuthUiEvent.OnPasswordChanged(it)) },
-                        label = { Text("Password (min 6 characters)") },
+                        label = { Text("Password (min 8 characters)") },
                         leadingIcon = {
                             Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         },

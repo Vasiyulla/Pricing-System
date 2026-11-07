@@ -67,8 +67,8 @@ class AuthViewModel(
             _uiState.update { it.copy(errorMessage = "Please enter a valid email address") }
             return
         }
-        if (password.length < 6) {
-            _uiState.update { it.copy(errorMessage = "Password must be at least 6 characters") }
+        if (password.length < 8) {
+            _uiState.update { it.copy(errorMessage = "Password must be at least 8 characters") }
             return
         }
         if (state.isSignUpMode && name.isBlank()) {
@@ -87,7 +87,18 @@ class AuthViewModel(
                 }
                 _uiState.update { it.copy(isLoading = false, step = AuthStep.SUCCESS) }
             } catch (e: Exception) {
-                val errorMsg = e.localizedMessage ?: "Authentication failed. Please verify credentials."
+                var errorMsg = e.localizedMessage ?: "Authentication failed. Please verify credentials."
+                if (e is retrofit2.HttpException) {
+                    try {
+                        val body = e.response()?.errorBody()?.string()
+                        if (!body.isNullOrBlank()) {
+                            val json = org.json.JSONObject(body)
+                            if (json.has("error")) {
+                                errorMsg = json.getString("error")
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
                 _uiState.update {
                     it.copy(
                         isLoading = false,
