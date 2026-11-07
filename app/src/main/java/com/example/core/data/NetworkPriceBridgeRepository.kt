@@ -765,31 +765,17 @@ class NetworkPriceBridgeRepository(
         displayName: String?,
         photoUrl: String?
     ): Boolean {
-        return try {
-            val token = idToken ?: "demo_google_token"
-            val session = api.service.loginWithGoogle(mapOf("id_token" to token))
-            AppSessionManager.setLoggedIn(
-                loggedIn = true,
-                mode = "GOOGLE",
-                email = email ?: session.email,
-                name = displayName ?: session.displayName,
-                avatarUrl = photoUrl ?: session.avatarUrl,
-                token = session.token
-            )
-            true
-        } catch (_: Exception) {
-            val effectiveEmail = email ?: "alex.turner@gmail.com"
-            val effectiveName = displayName ?: "Alex Turner"
-            AppSessionManager.setLoggedIn(
-                loggedIn = true,
-                mode = "GOOGLE",
-                email = effectiveEmail,
-                name = effectiveName,
-                avatarUrl = photoUrl ?: "",
-                token = idToken ?: "demo_jwt_token"
-            )
-            true
-        }
+        val token = idToken ?: throw IllegalArgumentException("Missing Google ID token")
+        val session = api.service.loginWithGoogle(mapOf("id_token" to token))
+        AppSessionManager.setLoggedIn(
+            loggedIn = true,
+            mode = "GOOGLE",
+            email = email ?: session.email,
+            name = displayName ?: session.displayName,
+            avatarUrl = photoUrl ?: session.avatarUrl,
+            token = session.token
+        )
+        return true
     }
 
     override suspend fun signInWithEmail(email: String, password: String): Boolean {

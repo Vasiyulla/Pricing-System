@@ -33,15 +33,15 @@ object AppSessionManager {
 
     private val _userProfile = MutableStateFlow(
         UserProfile(
-            id = "usr_scout_1",
-            displayName = "Alex Turner",
-            email = "alex.turner@gmail.com",
+            id = "guest_user",
+            displayName = "Guest Shopper",
+            email = "",
             phoneNumber = null,
-            karmaPoints = 350,
-            pricesReported = 16,
-            pricesVerified = 14,
-            accuracyPercent = 98,
-            memberSince = "Nov 2026",
+            karmaPoints = 0,
+            pricesReported = 0,
+            pricesVerified = 0,
+            accuracyPercent = 100,
+            memberSince = "Today",
             reputationLevel = "Community Scout",
             role = UserRole.ActiveContributor
         )
@@ -54,23 +54,39 @@ object AppSessionManager {
             val savedLoggedIn = prefs?.getBoolean(KEY_IS_LOGGED_IN, false) ?: false
             _isLoggedIn.value = savedLoggedIn
 
-            val savedName = prefs?.getString(KEY_USER_NAME, "Alex Turner") ?: "Alex Turner"
-            val savedEmail = prefs?.getString(KEY_USER_EMAIL, "alex.turner@gmail.com") ?: "alex.turner@gmail.com"
-            val savedKarma = prefs?.getInt(KEY_KARMA_POINTS, 350) ?: 350
+            if (savedLoggedIn) {
+                val savedName = prefs?.getString(KEY_USER_NAME, "Shopper") ?: "Shopper"
+                val savedEmail = prefs?.getString(KEY_USER_EMAIL, "") ?: ""
+                val savedKarma = prefs?.getInt(KEY_KARMA_POINTS, 350) ?: 350
 
-            _userProfile.value = _userProfile.value.copy(
-                displayName = savedName,
-                email = savedEmail,
-                karmaPoints = savedKarma
-            )
+                _userProfile.value = _userProfile.value.copy(
+                    displayName = savedName,
+                    email = savedEmail,
+                    karmaPoints = savedKarma
+                )
+            } else {
+                _userProfile.value = UserProfile(
+                    id = "guest_user",
+                    displayName = "Guest Shopper",
+                    email = "",
+                    phoneNumber = null,
+                    karmaPoints = 0,
+                    pricesReported = 0,
+                    pricesVerified = 0,
+                    accuracyPercent = 100,
+                    memberSince = "Today",
+                    reputationLevel = "Community Scout",
+                    role = UserRole.ActiveContributor
+                )
+            }
         }
     }
 
     fun setLoggedIn(
         loggedIn: Boolean,
         mode: String = "GUEST",
-        email: String = "alex.turner@gmail.com",
-        name: String = "Alex Turner",
+        email: String = "",
+        name: String = "Shopper",
         avatarUrl: String? = null,
         token: String = ""
     ) {
@@ -93,6 +109,19 @@ object AppSessionManager {
     fun logout() {
         _isLoggedIn.value = false
         prefs?.edit()?.clear()?.apply()
+        _userProfile.value = UserProfile(
+            id = "guest_user",
+            displayName = "Guest Shopper",
+            email = "",
+            phoneNumber = null,
+            karmaPoints = 0,
+            pricesReported = 0,
+            pricesVerified = 0,
+            accuracyPercent = 100,
+            memberSince = "Today",
+            reputationLevel = "Community Scout",
+            role = UserRole.ActiveContributor
+        )
     }
 
     /**

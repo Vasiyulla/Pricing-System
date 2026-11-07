@@ -94,6 +94,7 @@ import kotlinx.coroutines.launch
 fun AuthScreen(
     onAuthSuccess: () -> Unit,
     modifier: Modifier = Modifier,
+    canNavigateBack: Boolean = false,
     onNavigateBack: () -> Unit = {},
     viewModel: AuthViewModel = viewModel()
 ) {
@@ -130,37 +131,42 @@ fun AuthScreen(
                 viewModel.onEvent(event)
             }
         },
+        canNavigateBack = canNavigateBack,
         onNavigateBack = onNavigateBack,
         modifier = modifier
     )
 }
 
 /**
- * Stateless Google Authentication Content.
+ * Stateless Neon / Google Authentication Content.
+ * Clean, compact viewport layout: Logo -> Title -> Form -> DPDP notice -> Guest.
  */
 @Composable
 fun AuthContent(
     uiState: AuthUiState,
     onEvent: (AuthUiEvent) -> Unit,
     modifier: Modifier = Modifier,
+    canNavigateBack: Boolean = false,
     onNavigateBack: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
 
     Scaffold(
         topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back"
-                    )
+            if (canNavigateBack) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
                 }
             }
         },
@@ -172,48 +178,48 @@ fun AuthContent(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(scrollState)
-                .padding(horizontal = MaterialTheme.spacing.spaceLg, vertical = MaterialTheme.spacing.spaceMd),
+                .padding(horizontal = MaterialTheme.spacing.spaceLg, vertical = MaterialTheme.spacing.spaceSm),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Branding Header
+            // Compact Branding Header
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(76.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Icon(
                         imageVector = Icons.Default.Storefront,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Text(
                 text = stringResource(R.string.auth_title),
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = stringResource(R.string.auth_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 12.dp)
+                modifier = Modifier.padding(horizontal = 16.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Error Banner
             if (uiState.errorMessage != null) {
@@ -222,85 +228,18 @@ fun AuthContent(
                     color = MaterialTheme.colorScheme.errorContainer,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 16.dp)
+                        .padding(bottom = 12.dp)
                 ) {
                     Text(
                         text = uiState.errorMessage,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(14.dp)
+                        modifier = Modifier.padding(12.dp)
                     )
                 }
             }
 
-            // Value Propositions Card
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    AuthBenefitItem(
-                        icon = Icons.Default.Bolt,
-                        title = "Compare Local Store Prices",
-                        subtitle = "Find which supermarket or kirana has what you need cheapest"
-                    )
-                    AuthBenefitItem(
-                        icon = Icons.Default.NearMe,
-                        title = "Real-Time Nearby Discovery",
-                        subtitle = "GPS auto-locates stores and updates prices wherever you are"
-                    )
-                    AuthBenefitItem(
-                        icon = Icons.Default.Stars,
-                        title = "Earn Scout Karma Points",
-                        subtitle = "Get recognized for confirming shelf tags and reporting deals"
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // DPDP Consent Checkbox & Link
-            Row(
-                verticalAlignment = Alignment.Top,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Checkbox(
-                    checked = uiState.isConsentChecked,
-                    onCheckedChange = { onEvent(AuthUiEvent.OnToggleConsent(it)) },
-                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier
-                        .size(24.dp)
-                        .testTag("auth_consent_checkbox")
-                )
-
-                Spacer(modifier = Modifier.width(10.dp))
-
-                Column {
-                    Text(
-                        text = "I agree to on-demand location access and crowdsourced price sharing under applicable data protection privacy regulations.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = stringResource(R.string.dpdp_btn_view_terms),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clickable { onEvent(AuthUiEvent.OnOpenConsentSheet) }
-                            .padding(vertical = 2.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ── Neon PostgreSQL Developer Auth Card ──
+            // ── Neon PostgreSQL Developer Auth Card (Directly in upper viewport) ──
             Surface(
                 shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -308,8 +247,8 @@ fun AuthContent(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Sign In vs Sign Up Tab Selector
                     TabRow(
@@ -389,7 +328,7 @@ fun AuthContent(
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp)
+                            .height(48.dp)
                             .testTag("auth_submit_button")
                     ) {
                         if (uiState.isLoading) {
@@ -427,7 +366,48 @@ fun AuthContent(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // DPDP Micro-Consent beneath form
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+            ) {
+                Checkbox(
+                    checked = uiState.isConsentChecked,
+                    onCheckedChange = { onEvent(AuthUiEvent.OnToggleConsent(it)) },
+                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .testTag("auth_consent_checkbox")
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "I agree to on-demand location & DPDP rules. ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        text = "Privacy Notice",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 11.sp,
+                        modifier = Modifier.clickable { onEvent(AuthUiEvent.OnOpenConsentSheet) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Or separator
             Row(
@@ -443,17 +423,17 @@ fun AuthContent(
                 HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Secondary: Continue as Guest Button
             OutlinedButton(
                 onClick = { onEvent(AuthUiEvent.OnContinueAsGuest) },
                 enabled = !uiState.isLoading,
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .height(46.dp)
                     .testTag("auth_guest_button")
             ) {
                 Text(
@@ -462,6 +442,8 @@ fun AuthContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 
@@ -477,46 +459,6 @@ fun AuthContent(
     }
 }
 
-@Composable
-private fun AuthBenefitItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
 
 /**
  * DPDP 2023 Compliance Notice Bottom Sheet explaining data rights.

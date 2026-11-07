@@ -733,11 +733,13 @@ fun PriceBridgeNavHost(
         // ── Auth & DPDP Onboarding ──
 
         composable(Routes.AUTH) {
+            val canNavigateBack = navController.previousBackStackEntry != null
+            val context = LocalContext.current
 
             AuthScreen(
-
+                canNavigateBack = canNavigateBack,
                 onAuthSuccess = {
-                    if (navController.previousBackStackEntry != null) {
+                    if (canNavigateBack) {
                         navController.popBackStack()
                     } else {
                         navController.navigate(Routes.HOME) {
@@ -745,19 +747,14 @@ fun PriceBridgeNavHost(
                         }
                     }
                 },
-
                 onNavigateBack = {
-                    if (navController.previousBackStackEntry != null) {
+                    if (canNavigateBack) {
                         navController.popBackStack()
                     } else {
-                        navController.navigate(Routes.HOME) {
-                            popUpTo(Routes.AUTH) { inclusive = true }
-                        }
+                        (context as? android.app.Activity)?.finish()
                     }
                 }
-
             )
-
         }
 
         // ── The Trolley Ear (Audio Whisperer) ──
