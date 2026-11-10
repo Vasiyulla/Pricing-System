@@ -7,6 +7,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.core.data.PriceBridgeRepositoryProvider
 import com.example.core.data.PriceBridgeRepository
+import com.example.core.model.PriceStatusBadgeType
+import com.example.core.model.Product
+import com.example.core.model.StorePrice
 import com.example.core.vision.PriceVisionOcrEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,8 +19,9 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.UUID
 
-class ScanViewModel(
+class ScanViewModel @JvmOverloads constructor(
     application: Application,
     private val repository: PriceBridgeRepository = PriceBridgeRepositoryProvider.repository
 ) : AndroidViewModel(application) {
@@ -123,27 +127,96 @@ class ScanViewModel(
     private fun submitPriceWithPhoto() {
         val state = _uiState.value
         val price = state.priceInput.toDoubleOrNull() ?: 0.0
-        val product = state.productNameInput.trim()
-        val store = state.storeNameInput.trim()
+        val productName = state.productNameInput.trim()
+        val storeName = state.storeNameInput.trim()
 
-        if (price <= 0.0 || product.isBlank() || store.isBlank()) {
+        if (price <= 0.0 || productName.isBlank() || storeName.isBlank()) {
             return
         }
 
         _uiState.update { it.copy(isSubmittingPrice = true) }
 
         viewModelScope.launch {
-            // Find or use a realistic product ID
-            val productId = product.lowercase().replace(" ", "_").take(30)
-            val storeId = store.lowercase().replace(" ", "_").take(30)
+            var resolvedProductId: String? = null
+            var resolvedStoreId = "store_tesco_camden"
+            try {
+                // 1. Resolve or create a real Product ID in PostgreSQL
+                val existingProduct = repository.searchProducts(productName, null).firstOrNull()?.firstOrNull()
+                resolvedProductId = if (existingProduct != null) {
+                    existingProduct.id
+                } else {
+                    val newId = "prod_${UUID.randomUUID().toString().take(12)}"
+                    repository.addProduct(
+                        Product(
+                            id = newId,
+                            name = productName,
+                            categoryId = "Pantry & Staples",
+                            quantityDescription = state.unitInput.ifBlank { "1 unit" },
+                            packageSizeBadge = state.unitInput.ifBlank { "1 unit" }.take(8),
+                            imageUrl = "",
+                            bestStorePrice = StorePrice(
+                                storeId = resolvedStoreId,
+                                storeName = storeName,
+                                distanceFormatted = "--",
+                                price = price,
+                                mrp = price * 1.15,
+                                lastObservedRelativeTime = "Just now",
+                                sourceDescription = "Photo scan",
+                                statusBadge = PriceStatusBadgeType.RecentlyObserved,
+                                isLowestPrice = true
+                            ),
+                            storesComparedCount = 1,
+                            alternativePrices = emptyList()
+                        )
+                    )
+                }
 
-            repository.submitPrice(
-                productId = productId,
-                storeId = storeId,
-                price = price,
-                mrp = price * 1.15,
-                sourceType = state.evidenceType
-            )
+                // 2. Resolve real Store ID from nearby stores
+                val nearbyStores = repository.getNearbyStores().firstOrNull() ?: emptyList()
+                val matchedStore = nearbyStores.find {
+                    it.name.contains(storeName, ignoreCase = true) ||
+                        storeName.contains(it.name, ignoreCase = true)
+                } ?: nearbyStores.firstOrNull()
+                if (matchedStore != null) {
+                    resolvedStoreId = matchedStore.id
+                }
+
+                // 3. Upload EXIF-stripped photo evidence if real file exists
+                val photoUri = state.capturedPhotoUri
+                val evidenceId = if (!photoUri.isNullOrBlank() &&
+                    !photoUri.startsWith("sample_") &&
+                    !photoUri.startsWith("photo_captured_")
+                ) {
+                    repository.uploadEvidence(
+                        productId = resolvedProductId,
+                        storeId = resolvedStoreId,
+                        sourceType = state.evidenceType,
+                        imagePath = photoUri,
+                        ocrRawText = state.rawOcrText ?: ""
+                    )
+                } else {
+                    null
+                }
+
+                // 4. Submit price to append-only ledger
+                repository.submitPrice(
+                    productId = resolvedProductId,
+                    storeId = resolvedStoreId,
+                    price = price,
+                    mrp = price * 1.15,
+                    sourceType = state.evidenceType,
+                    evidenceId = evidenceId
+                )
+            } catch (_: Exception) {
+                // Offline fallback: enqueue into Room WorkManager sync queue
+                repository.enqueueOfflinePrice(
+                    productId = resolvedProductId ?: productName.lowercase().replace(" ", "_").take(30),
+                    storeId = resolvedStoreId,
+                    price = price,
+                    mrp = price * 1.15,
+                    sourceType = state.evidenceType
+                )
+            }
 
             _uiState.update {
                 it.copy(

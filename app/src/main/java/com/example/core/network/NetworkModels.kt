@@ -64,7 +64,8 @@ data class NetworkPriceSubmission(
     @Json(name = "loyalty_price_pence") val loyaltyPricePence: Int? = null,
     @Json(name = "loyalty_scheme") val loyaltyScheme: String? = null,
     @Json(name = "source_type") val sourceType: String = "mobile_app",
-    @Json(name = "idempotency_key") val idempotencyKey: String? = null
+    @Json(name = "idempotency_key") val idempotencyKey: String? = null,
+    @Json(name = "evidence_id") val evidenceId: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -189,7 +190,39 @@ data class NetworkUserSession(
     @Json(name = "avatar_url") val avatarUrl: String? = null,
     val role: String = "ActiveContributor",
     val token: String = "",
-    @Json(name = "karma_points") val karmaPoints: Int = 350,
+    @Json(name = "karma_points") val karmaPoints: Int = 50,
     @Json(name = "auth_mode") val authMode: String = "GOOGLE"
+)
+
+@JsonClass(generateAdapter = true)
+data class NetworkEvidenceUploadResponse(
+    @Json(name = "evidence_id") val evidenceId: String,
+    @Json(name = "image_hash") val imageHash: String = "",
+    @Json(name = "exif_stripped") val exifStripped: Boolean = true
+)
+
+@JsonClass(generateAdapter = true)
+data class NetworkUserProfileStats(
+    val id: String,
+    val email: String,
+    @Json(name = "display_name") val displayName: String,
+    @Json(name = "avatar_url") val avatarUrl: String = "",
+    val role: String = "ActiveContributor",
+    @Json(name = "karma_points") val karmaPoints: Int = 50,
+    @Json(name = "prices_reported") val pricesReported: Int = 0,
+    @Json(name = "prices_verified") val pricesVerified: Int = 0
+)
+
+@JsonClass(generateAdapter = true)
+data class NetworkPriceRecordItem(
+    val id: String,
+    @Json(name = "product_id") val productId: String,
+    @Json(name = "product_name") val productName: String = "",
+    @Json(name = "store_id") val storeId: String,
+    @Json(name = "store_name") val storeName: String = "",
+    @Json(name = "regular_price_pence") val regularPricePence: Int,
+    @Json(name = "freshness_status") val freshnessStatus: String = "RECENTLY_OBSERVED",
+    @Json(name = "source_type") val sourceType: String = "mobile_app",
+    @Json(name = "observed_at") val observedAt: String = ""
 )
 

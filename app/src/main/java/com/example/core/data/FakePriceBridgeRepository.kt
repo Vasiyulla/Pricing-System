@@ -992,7 +992,8 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
         storeId: String,
         price: Double,
         mrp: Double,
-        sourceType: String
+        sourceType: String,
+        evidenceId: String?
     ) {
         // Simulate network delay
         kotlinx.coroutines.delay(1200)

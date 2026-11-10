@@ -32,10 +32,15 @@ type MemoryStore struct {
 	mu             sync.RWMutex
 	stores         map[string]domain.Store
 	products       map[string]domain.Product
-	barcodeIndex   map[string]string // barcode -> productID
+	barcodeIndex   map[string]string               // barcode -> productID
 	prices         map[string][]domain.PriceRecord // productID -> records
 	bounties       map[string]domain.Bounty
 	yellowStickers map[string]domain.YellowStickerDeal
+	users          map[string]domain.UserProfileRecord
+	sessions       map[string]domain.AuthSessionRecord
+	evidences      map[string]domain.EvidenceRecord
+	discrepancies  map[string]map[string]bool // storeID -> set of reporterID
+	freshnessVotes map[string]map[string]bool // "prod|store" -> set of userID
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -46,6 +51,11 @@ func NewMemoryStore() *MemoryStore {
 		prices:         make(map[string][]domain.PriceRecord),
 		bounties:       make(map[string]domain.Bounty),
 		yellowStickers: make(map[string]domain.YellowStickerDeal),
+		users:          make(map[string]domain.UserProfileRecord),
+		sessions:       make(map[string]domain.AuthSessionRecord),
+		evidences:      make(map[string]domain.EvidenceRecord),
+		discrepancies:  make(map[string]map[string]bool),
+		freshnessVotes: make(map[string]map[string]bool),
 	}
 	ms.seedLondonData()
 	return ms
@@ -231,19 +241,33 @@ func (r *memoryPriceRepo) SubmitPrice(ctx context.Context, record domain.PriceRe
 	return nil
 }
 
-func (r *memoryPriceRepo) ConfirmFreshness(ctx context.Context, productID, storeID string) error {
+func (r *memoryPriceRepo) ConfirmFreshness(ctx context.Context, productID, storeID, userID string) (int, error) {
 	r.ms.mu.Lock()
 	defer r.ms.mu.Unlock()
+
+	key := productID + "|" + storeID
+	if r.ms.freshnessVotes[key] == nil {
+		r.ms.freshnessVotes[key] = make(map[string]bool)
+	}
+	if userID == "" {
+		userID = "anon"
+	}
+	r.ms.freshnessVotes[key][userID] = true
+	count := len(r.ms.freshnessVotes[key])
 
 	records := r.ms.prices[productID]
 	for i := range records {
 		if records[i].StoreID == storeID && records[i].SupersededBy == nil {
 			records[i].ObservedAt = time.Now()
-			records[i].FreshnessStatus = domain.FreshnessCommunityCorroborated
-			return nil
+			if count >= 2 {
+				records[i].FreshnessStatus = domain.FreshnessCommunityCorroborated
+			} else {
+				records[i].FreshnessStatus = domain.FreshnessRecentlyObserved
+			}
+			return count, nil
 		}
 	}
-	return fmt.Errorf("no active price to refresh for product %s at store %s", productID, storeID)
+	return count, fmt.Errorf("no active price to refresh for product %s at store %s", productID, storeID)
 }
 
 func (r *memoryPriceRepo) GetAllPrices(ctx context.Context) ([]domain.PriceRecord, error) {
@@ -259,6 +283,79 @@ func (r *memoryPriceRepo) GetAllPrices(ctx context.Context) ([]domain.PriceRecor
 		}
 	}
 	return result, nil
+}
+
+func (r *memoryPriceRepo) GetSubmissionsByUser(ctx context.Context, userID string) ([]domain.PriceRecord, error) {
+	r.ms.mu.RLock()
+	defer r.ms.mu.RUnlock()
+
+	var result []domain.PriceRecord
+	for _, recs := range r.ms.prices {
+		for _, rec := range recs {
+			if rec.SubmittedByUserID == userID {
+				copyRec := rec
+				if p, ok := r.ms.products[rec.ProductID]; ok {
+					copyRec.ProductName = p.Name
+				}
+				if st, ok := r.ms.stores[rec.StoreID]; ok {
+					copyRec.StoreName = st.Name
+				}
+				result = append(result, copyRec)
+			}
+		}
+	}
+	return result, nil
+}
+
+func (r *memoryPriceRepo) GetBestDealsSingleQuery(ctx context.Context, lat, lon, radiusKm float64, category string) ([]domain.ProductDealSummary, error) {
+	r.ms.mu.RLock()
+	defer r.ms.mu.RUnlock()
+
+	var summaries []domain.ProductDealSummary
+	for _, prod := range r.ms.products {
+		if category != "" && prod.Category != category {
+			continue
+		}
+		summary := domain.ProductDealSummary{
+			Product:             prod,
+			BestPricePence:      int(math.Round(prod.TargetMRP * 100)),
+			BestPriceGBP:        fmt.Sprintf("£%.2f", prod.TargetMRP),
+			BestStoreName:       "Nearby Supermarket",
+			BestStoreDistanceKm: 0.5,
+			ComparedStoreCount:  1,
+			FreshnessStatus:     domain.FreshnessRecentlyObserved,
+		}
+		bestEff := math.MaxInt32
+		for _, rec := range r.ms.prices[prod.ID] {
+			if rec.SupersededBy != nil {
+				continue
+			}
+			st, ok := r.ms.stores[rec.StoreID]
+			if !ok {
+				continue
+			}
+			dist := HaversineDistanceKm(lat, lon, st.Latitude, st.Longitude)
+			if dist > radiusKm {
+				continue
+			}
+			eff := rec.RegularPricePence
+			if rec.LoyaltyPricePence != nil && *rec.LoyaltyPricePence < eff {
+				eff = *rec.LoyaltyPricePence
+			}
+			if eff < bestEff {
+				bestEff = eff
+				summary.BestPricePence = eff
+				summary.BestPriceGBP = fmt.Sprintf("£%.2f", float64(eff)/100.0)
+				summary.BestStoreName = st.Name
+				summary.BestStoreID = st.ID
+				summary.BestStoreDistanceKm = math.Round(dist*100) / 100
+				summary.FreshnessStatus = rec.FreshnessStatus
+			}
+			summary.ComparedStoreCount++
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries, nil
 }
 
 // ── Bounty Repository Adapter ──
@@ -369,14 +466,152 @@ func (r *memoryYellowStickerRepo) Create(ctx context.Context, deal domain.Yellow
 	return nil
 }
 
+// ── Session, Evidence & Discrepancy Adapters ──
+
+type memorySessionRepo struct{ ms *MemoryStore }
+
+func (r *memorySessionRepo) UpsertUser(ctx context.Context, user domain.UserProfileRecord) (*domain.UserProfileRecord, error) {
+	r.ms.mu.Lock()
+	defer r.ms.mu.Unlock()
+	if existing, ok := r.ms.users[user.ID]; ok {
+		existing.Email = user.Email
+		existing.DisplayName = user.DisplayName
+		if user.AvatarURL != "" {
+			existing.AvatarURL = user.AvatarURL
+		}
+		r.ms.users[user.ID] = existing
+		return &existing, nil
+	}
+	if user.KarmaPoints == 0 {
+		user.KarmaPoints = 50
+	}
+	r.ms.users[user.ID] = user
+	return &user, nil
+}
+
+func (r *memorySessionRepo) GetUserProfile(ctx context.Context, userID string) (*domain.UserProfileRecord, error) {
+	r.ms.mu.RLock()
+	defer r.ms.mu.RUnlock()
+	if u, ok := r.ms.users[userID]; ok {
+		return &u, nil
+	}
+	return nil, fmt.Errorf("user not found")
+}
+
+func (r *memorySessionRepo) IncrementUserStats(ctx context.Context, userID string, karmaDelta, reportedDelta, verifiedDelta int) error {
+	r.ms.mu.Lock()
+	defer r.ms.mu.Unlock()
+	u, ok := r.ms.users[userID]
+	if !ok {
+		return nil
+	}
+	u.KarmaPoints += karmaDelta
+	u.PricesReported += reportedDelta
+	u.PricesVerified += verifiedDelta
+	r.ms.users[userID] = u
+	return nil
+}
+
+func (r *memorySessionRepo) SaveSession(ctx context.Context, sess domain.AuthSessionRecord) error {
+	r.ms.mu.Lock()
+	defer r.ms.mu.Unlock()
+	r.ms.sessions[sess.Token] = sess
+	return nil
+}
+
+func (r *memorySessionRepo) GetSession(ctx context.Context, token string) (*domain.AuthSessionRecord, error) {
+	r.ms.mu.RLock()
+	defer r.ms.mu.RUnlock()
+	s, ok := r.ms.sessions[token]
+	if !ok || time.Now().After(s.ExpiresAt) {
+		return nil, fmt.Errorf("session not found or expired")
+	}
+	return &s, nil
+}
+
+func (r *memorySessionRepo) DeleteSession(ctx context.Context, token string) error {
+	r.ms.mu.Lock()
+	defer r.ms.mu.Unlock()
+	delete(r.ms.sessions, token)
+	return nil
+}
+
+func (r *memorySessionRepo) PurgeExpiredSessions(ctx context.Context) (int64, error) {
+	r.ms.mu.Lock()
+	defer r.ms.mu.Unlock()
+	var count int64
+	now := time.Now()
+	for tok, s := range r.ms.sessions {
+		if now.After(s.ExpiresAt) {
+			delete(r.ms.sessions, tok)
+			count++
+		}
+	}
+	return count, nil
+}
+
+type memoryOutboxRepo struct{}
+
+func (r *memoryOutboxRepo) FetchPending(ctx context.Context, limit int) ([]domain.OutboxEvent, error) {
+	return nil, nil
+}
+
+func (r *memoryOutboxRepo) MarkProcessed(ctx context.Context, id string) error {
+	return nil
+}
+
+type memoryEvidenceRepo struct{ ms *MemoryStore }
+
+func (r *memoryEvidenceRepo) SaveEvidence(ctx context.Context, ev domain.EvidenceRecord) (string, error) {
+	r.ms.mu.Lock()
+	defer r.ms.mu.Unlock()
+	if ev.ID == "" {
+		ev.ID = fmt.Sprintf("ev_%d", time.Now().UnixNano())
+	}
+	r.ms.evidences[ev.ID] = ev
+	return ev.ID, nil
+}
+
+type memoryDiscrepancyRepo struct{ ms *MemoryStore }
+
+func (r *memoryDiscrepancyRepo) RecordDiscrepancy(ctx context.Context, report *domain.StoreDiscrepancyReport) (int, error) {
+	r.ms.mu.Lock()
+	defer r.ms.mu.Unlock()
+	if r.ms.discrepancies[report.StoreID] == nil {
+		r.ms.discrepancies[report.StoreID] = make(map[string]bool)
+	}
+	r.ms.discrepancies[report.StoreID][report.ReporterID] = true
+	return len(r.ms.discrepancies[report.StoreID]), nil
+}
+
+func (r *memoryDiscrepancyRepo) UpdateStoreReliability(ctx context.Context, storeID string, score int) error {
+	r.ms.mu.Lock()
+	defer r.ms.mu.Unlock()
+	if st, ok := r.ms.stores[storeID]; ok {
+		st.ReliabilityScore = score
+		if score < 60 {
+			st.IsConfirmedPartner = false
+			st.VerificationStatus = domain.StoreStatusFlaggedInactive
+		}
+		r.ms.stores[storeID] = st
+	}
+	return nil
+}
+
 // ── Factory Getters ──
 
-func (ms *MemoryStore) StoreRepo() StoreRepository                 { return &memoryStoreRepo{ms: ms} }
-func (ms *MemoryStore) ProductRepo() ProductRepository             { return &memoryProductRepo{ms: ms} }
-func (ms *MemoryStore) PriceRepo() PriceRepository                 { return &memoryPriceRepo{ms: ms} }
-func (ms *MemoryStore) BountyRepo() BountyRepository               { return &memoryBountyRepo{ms: ms} }
-func (ms *MemoryStore) YellowStickerRepo() YellowStickerRepository { return &memoryYellowStickerRepo{ms: ms} }
-func (ms *MemoryStore) CategoryRepo() CategoryRepository           { return &memoryCategoryRepo{ms: ms} }
+func (ms *MemoryStore) StoreRepo() StoreRepository     { return &memoryStoreRepo{ms: ms} }
+func (ms *MemoryStore) ProductRepo() ProductRepository { return &memoryProductRepo{ms: ms} }
+func (ms *MemoryStore) PriceRepo() PriceRepository     { return &memoryPriceRepo{ms: ms} }
+func (ms *MemoryStore) BountyRepo() BountyRepository   { return &memoryBountyRepo{ms: ms} }
+func (ms *MemoryStore) YellowStickerRepo() YellowStickerRepository {
+	return &memoryYellowStickerRepo{ms: ms}
+}
+func (ms *MemoryStore) CategoryRepo() CategoryRepository       { return &memoryCategoryRepo{ms: ms} }
+func (ms *MemoryStore) SessionRepo() SessionRepository         { return &memorySessionRepo{ms: ms} }
+func (ms *MemoryStore) EvidenceRepo() EvidenceRepository       { return &memoryEvidenceRepo{ms: ms} }
+func (ms *MemoryStore) DiscrepancyRepo() DiscrepancyRepository { return &memoryDiscrepancyRepo{ms: ms} }
+func (ms *MemoryStore) OutboxRepo() OutboxRepository           { return &memoryOutboxRepo{} }
 
 // ── London Seed Data ──
 

@@ -112,9 +112,39 @@ interface PriceBridgeApiService {
         @Body payload: Map<String, String>
     ): NetworkUserSession
 
+    @POST("api/v1/auth/logout")
+    suspend fun logout(): Map<String, String>
+
     @POST("api/v1/admin/db/reset")
     suspend fun resetDatabase(
         @Body payload: Map<String, @JvmSuppressWildcards Any> = emptyMap()
     ): Map<String, Any>
+
+    @POST("api/v1/products")
+    suspend fun createProduct(
+        @Body payload: Map<String, @JvmSuppressWildcards Any>
+    ): NetworkProduct
+
+    @POST("api/v1/prices/confirm-freshness")
+    suspend fun confirmPriceFreshness(
+        @Body payload: Map<String, String>
+    ): Map<String, Any>
+
+    @POST("api/v1/stores/{id}/report-discrepancy")
+    suspend fun reportStoreDiscrepancy(
+        @Path("id") storeId: String,
+        @Body payload: Map<String, @JvmSuppressWildcards Any>
+    ): Map<String, Any>
+
+    @POST("api/v1/evidence/upload")
+    suspend fun uploadEvidence(
+        @Body payload: Map<String, String>
+    ): NetworkEvidenceUploadResponse
+
+    @GET("api/v1/users/me/profile")
+    suspend fun getMyProfile(): NetworkUserProfileStats
+
+    @GET("api/v1/users/me/submissions")
+    suspend fun getMySubmissions(): List<NetworkPriceRecordItem>
 }
 

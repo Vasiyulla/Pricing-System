@@ -62,8 +62,16 @@ interface PriceBridgeRepository {
         storeId: String,
         price: Double,
         mrp: Double,
-        sourceType: String
+        sourceType: String,
+        evidenceId: String? = null
     )
+    suspend fun uploadEvidence(
+        productId: String? = null,
+        storeId: String? = null,
+        sourceType: String,
+        imagePath: String,
+        ocrRawText: String = ""
+    ): String? = null
     fun getPendingOfflineSubmissionCount(): Flow<Int>
     fun getQueuedSubmissions(): Flow<List<QueuedSubmissionEntity>>
     suspend fun enqueueOfflinePrice(

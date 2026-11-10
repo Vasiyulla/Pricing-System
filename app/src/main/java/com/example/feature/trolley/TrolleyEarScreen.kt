@@ -28,10 +28,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -63,8 +63,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.data.PriceBridgeRepositoryProvider
+import com.example.core.network.ApiClient
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 data class TrolleySampleItem(
@@ -78,46 +81,26 @@ data class TrolleySampleItem(
     val voiceScript: String
 )
 
-val TROLLEY_CATALOG = listOf(
+private val FALLBACK_TROLLEY_ITEMS = listOf(
     TrolleySampleItem(
-        id = "item_1",
-        name = "Nandini Toned Milk 500ml",
-        storePrice = "₹26",
-        bestAlternativePrice = "₹24",
-        altStoreName = "Krishna Kirana",
-        distance = "80m away",
-        recommendation = "BUY",
-        voiceScript = "Put it in the trolley! Nandini milk is at the best nearby price right here at ₹24."
-    ),
-    TrolleySampleItem(
-        id = "item_2",
-        name = "Fortune Sunflower Oil 1L",
-        storePrice = "₹145",
-        bestAlternativePrice = "₹118",
-        altStoreName = "Reliance Smart",
-        distance = "250m away",
+        id = "prod_lurpak",
+        name = "Lurpak Slightly Salted 500g",
+        storePrice = "£4.50",
+        bestAlternativePrice = "£3.00",
+        altStoreName = "Tesco Express Camden",
+        distance = "220m away",
         recommendation = "SKIP",
-        voiceScript = "Fortune Oil is ₹145 here. Skip it! Reliance Smart 250 metres away has it for ₹118, saving you ₹27."
+        voiceScript = "Lurpak 500g is £4.50 here. Wait! Tesco Express 220 metres away has it for £3.00 with Clubcard."
     ),
     TrolleySampleItem(
-        id = "item_3",
-        name = "Aashirvaad Superior MP Atta 5kg",
-        storePrice = "₹280",
-        bestAlternativePrice = "₹245",
-        altStoreName = "DMart Ready",
-        distance = "400m away",
-        recommendation = "SKIP",
-        voiceScript = "Aashirvaad Atta is ₹280 here. You can save ₹35 by getting it at DMart Ready for ₹245."
-    ),
-    TrolleySampleItem(
-        id = "item_4",
-        name = "Tata Tea Gold 500g",
-        storePrice = "₹310",
-        bestAlternativePrice = "₹310",
-        altStoreName = "Current Store",
+        id = "prod_whole_milk",
+        name = "British Whole Milk 4 Pints",
+        storePrice = "£1.48",
+        bestAlternativePrice = "£1.48",
+        altStoreName = "Aldi Camden",
         distance = "0m",
         recommendation = "BUY",
-        voiceScript = "Tata Tea Gold is at its 7-day lowest price right here at ₹310. Great deal!"
+        voiceScript = "Put it in the trolley! British Whole Milk is at the best nearby price right here at £1.48."
     )
 )
 
@@ -128,10 +111,12 @@ fun TrolleyEarScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val repository = PriceBridgeRepositoryProvider.repository
 
+    var trolleyItems by remember { mutableStateOf(FALLBACK_TROLLEY_ITEMS) }
     var isListening by remember { mutableStateOf(true) }
     var currentItemIndex by remember { mutableStateOf(0) }
-    val currentItem = TROLLEY_CATALOG[currentItemIndex]
+    val currentItem = trolleyItems.getOrElse(currentItemIndex) { FALLBACK_TROLLEY_ITEMS.first() }
 
     var ttsEngine by remember { mutableStateOf<TextToSpeech?>(null) }
     var isTtsReady by remember { mutableStateOf(false) }
@@ -151,7 +136,7 @@ fun TrolleyEarScreen(
         label = "pulseScale"
     )
 
-    // Initialize Native Android TextToSpeech
+    // Load live product whispers from Go backend + initialize TTS
     LaunchedEffect(Unit) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         if (audioManager != null) {
@@ -168,10 +153,50 @@ fun TrolleyEarScreen(
 
         ttsEngine = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                ttsEngine?.language = Locale.ENGLISH
+                ttsEngine?.language = Locale.UK
                 ttsEngine?.setSpeechRate(1.05f)
                 isTtsReady = true
             }
+        }
+
+        withContext(Dispatchers.IO) {
+            try {
+                val loc = repository.getLocation().firstOrNull()
+                val lat = loc?.latitude?.takeIf { it != 0.0 } ?: 51.5390
+                val lon = loc?.longitude?.takeIf { it != 0.0 } ?: -0.1426
+                val stores = repository.getNearbyStores().firstOrNull().orEmpty()
+                val currentStoreId = stores.firstOrNull()?.id ?: "store_tesco_camden"
+                val products = repository.getAllProducts().firstOrNull().orEmpty().take(6)
+
+                val fetched = products.mapNotNull { prod ->
+                    try {
+                        val whisper = ApiClient.service.getTrolleyWhisper(prod.id, currentStoreId, lat, lon)
+                        val curPrice = "£%.2f".format(whisper.currentPricePence / 100.0)
+                        val altStore = whisper.alternativeStore?.name ?: "Current Store"
+                        val altPricePence = (whisper.currentPricePence - (whisper.potentialSavingsPence ?: 0)).coerceAtLeast(10)
+                        val altPrice = "£%.2f".format(altPricePence / 100.0)
+                        val distStr = whisper.alternativeStore?.distanceKm?.let {
+                            if (it < 1.0) "${(it * 1000).toInt()}m away" else "%.1f km away".format(it)
+                        } ?: "Nearby"
+                        TrolleySampleItem(
+                            id = prod.id,
+                            name = whisper.productName.ifBlank { prod.name },
+                            storePrice = curPrice,
+                            bestAlternativePrice = altPrice,
+                            altStoreName = altStore,
+                            distance = distStr,
+                            recommendation = whisper.recommendation,
+                            voiceScript = whisper.whisperText
+                        )
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                if (fetched.isNotEmpty()) {
+                    trolleyItems = fetched
+                    currentItemIndex = 0
+                }
+            } catch (_: Exception) {}
         }
     }
 
@@ -261,7 +286,7 @@ fun TrolleyEarScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            if (isListening) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.VolumeOff,
+                            if (isListening) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                             contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(42.dp)
@@ -343,8 +368,8 @@ fun TrolleyEarScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(TROLLEY_CATALOG.indices.toList()) { idx ->
-                        val item = TROLLEY_CATALOG[idx]
+                    items(trolleyItems.indices.toList()) { idx ->
+                        val item = trolleyItems[idx]
                         val isSelected = currentItemIndex == idx
                         Surface(
                             onClick = {
@@ -372,8 +397,10 @@ fun TrolleyEarScreen(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedButton(
                         onClick = {
-                            currentItemIndex = (currentItemIndex + 1) % TROLLEY_CATALOG.size
-                            speakAdvice(TROLLEY_CATALOG[currentItemIndex].voiceScript)
+                            if (trolleyItems.isNotEmpty()) {
+                                currentItemIndex = (currentItemIndex + 1) % trolleyItems.size
+                                speakAdvice(trolleyItems[currentItemIndex].voiceScript)
+                            }
                         },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f)

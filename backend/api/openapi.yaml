@@ -1,165 +1,303 @@
 openapi: 3.0.3
 info:
-  title: Price Bridge UK API
-  description: High-throughput crowdsourced price comparison and retail intelligence engine for UK supermarkets.
-  version: 1.0.0
+  title: Price Bridge UK Enterprise API
+  description: Crowdsourced price comparison, EXIF-stripped evidence storage, and retail intelligence engine.
+  version: 2.0.0
 servers:
   - url: http://localhost:8080
     description: Local Go Backend
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+    AdminSecret:
+      type: apiKey
+      in: header
+      name: X-Admin-Secret
 paths:
   /health:
     get:
-      summary: Health check
+      summary: Service and dependency health check
       responses:
         '200':
-          description: API is operational
+          description: Operational status of PostgreSQL and Redis
+  /metrics:
+    get:
+      summary: Prometheus text exposition metrics
+      responses:
+        '200':
+          description: Prometheus telemetry counters
+  /api/v1/auth/sign-up:
+    post:
+      summary: Register account via Neon PostgreSQL Auth
+      responses:
+        '200':
+          description: UserSession with bearer token
+  /api/v1/auth/sign-in:
+    post:
+      summary: Authenticate account via Neon PostgreSQL Auth
+      responses:
+        '200':
+          description: UserSession with bearer token
+  /api/v1/auth/google:
+    post:
+      summary: Exchange verified Google OAuth ID token for durable session
+      responses:
+        '200':
+          description: UserSession with bearer token
+  /api/v1/auth/logout:
+    post:
+      summary: Revoke active session token
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logged out
+  /api/v1/users/me/profile:
+    get:
+      summary: Fetch authenticated user profile & karma stats
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Persisted UserProfileRecord
+  /api/v1/users/me/submissions:
+    get:
+      summary: Fetch authenticated user submission history
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of user price submissions
   /api/v1/stores/nearby:
     get:
-      summary: Get nearby stores
+      summary: Get nearby stores via Redis Geo / PostGIS
       parameters:
         - name: lat
           in: query
-          schema:
-            type: number
+          schema: { type: number }
         - name: lon
           in: query
-          schema:
-            type: number
+          schema: { type: number }
         - name: radius_km
           in: query
-          schema:
-            type: number
+          schema: { type: number }
       responses:
         '200':
           description: List of stores
+  /api/v1/stores/{id}:
+    get:
+      summary: Get store by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Store metadata
+  /api/v1/stores/verify:
+    post:
+      summary: Multi-tier store existence check (PostGIS -> FSA -> OSM Overpass)
+      responses:
+        '200':
+          description: Verification outcome
+  /api/v1/stores/{id}/report-discrepancy:
+    post:
+      summary: Report store closure or mismatch (anti-abuse 2+ independent reporters rule)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Discrepancy status
+  /api/v1/products:
+    post:
+      summary: Create catalog product (deduplicates by barcode)
+      security:
+        - BearerAuth: []
+      responses:
+        '201':
+          description: Created Product
+  /api/v1/products/deals:
+    get:
+      summary: Single-query batch deals ranked across nearby stores
+      parameters:
+        - name: lat
+          in: query
+          schema: { type: number }
+        - name: lon
+          in: query
+          schema: { type: number }
+        - name: category
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Ranked product deal summaries
   /api/v1/products/search:
     get:
       summary: Search products
       parameters:
         - name: q
           in: query
-          schema:
-            type: string
+          schema: { type: string }
         - name: category
           in: query
-          schema:
-            type: string
+          schema: { type: string }
       responses:
         '200':
           description: List of products
   /api/v1/products/barcode/{ean}:
     get:
-      summary: Get product by EAN barcode
+      summary: Lookup product by EAN barcode
       parameters:
         - name: ean
           in: path
           required: true
-          schema:
-            type: string
+          schema: { type: string }
+      responses:
+        '200':
+          description: Product
+  /api/v1/products/{id}:
+    get:
+      summary: Get product by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
       responses:
         '200':
           description: Product
   /api/v1/products/{id}/compare:
     get:
-      summary: Compare prices across stores with dual loyalty pricing
+      summary: Compare prices across nearby stores with loyalty pricing
       parameters:
         - name: id
           in: path
           required: true
-          schema:
-            type: string
+          schema: { type: string }
         - name: lat
           in: query
-          schema:
-            type: number
+          schema: { type: number }
         - name: lon
           in: query
-          schema:
-            type: number
+          schema: { type: number }
       responses:
         '200':
-          description: Ranked comparisons
+          description: Ranked store price comparisons
   /api/v1/products/{id}/trolley-whisper:
     get:
-      summary: Trolley Ear audio advice
+      summary: Trolley Ear contextual price alert
       parameters:
         - name: id
           in: path
           required: true
-          schema:
-            type: string
+          schema: { type: string }
         - name: store_id
           in: query
-          schema:
-            type: string
+          schema: { type: string }
       responses:
         '200':
-          description: Whisper advice text
+          description: Audio whisper text
   /api/v1/prices/submit:
     post:
-      summary: Submit price to append-only ledger
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [product_id, store_id, regular_price_pence, source_type]
-              properties:
-                product_id:
-                  type: string
-                store_id:
-                  type: string
-                regular_price_pence:
-                  type: integer
-                loyalty_price_pence:
-                  type: integer
-                loyalty_scheme:
-                  type: string
-                source_type:
-                  type: string
+      summary: Submit price observation to append-only ledger
+      security:
+        - BearerAuth: []
       responses:
         '201':
-          description: Submitted
+          description: Price submitted
+  /api/v1/prices/batch-sync:
+    post:
+      summary: Batch-sync offline queued submissions idempotently
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Sync summary
+  /api/v1/prices/confirm-freshness:
+    post:
+      summary: Corroborate price freshness (2+ independent votes -> COMMUNITY_CORROBORATED)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Freshness confirmation summary
+  /api/v1/evidence/upload:
+    post:
+      summary: Upload image evidence (strips EXIF GPS metadata and stores in Object Storage)
+      security:
+        - BearerAuth: []
+      responses:
+        '201':
+          description: Stored evidence ID and SHA-256 hash
   /api/v1/basket/optimize:
     post:
       summary: 2-Stop Pareto basket optimizer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                items:
-                  type: array
-                  items:
-                    type: object
-                user_lat:
-                  type: number
-                user_lon:
-                  type: number
       responses:
         '200':
-          description: Optimized 2-stop breakdown
+          description: Optimized 1-store vs 2-store breakdown
   /api/v1/bounties/nearby:
     get:
-      summary: Active price-gap bounties
+      summary: Active price-gap verification bounties
       responses:
         '200':
           description: List of bounties
+  /api/v1/bounties/prompt:
+    get:
+      summary: Highest priority active verification prompt
+      responses:
+        '200':
+          description: Bounty prompt
+  /api/v1/bounties/{id}/claim:
+    post:
+      summary: Claim verification bounty
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Claimed
+  /api/v1/categories:
+    get:
+      summary: List catalog categories
+      responses:
+        '200':
+          description: List of categories
+  /api/v1/yellow-stickers/active:
+    get:
+      summary: List active clearance yellow sticker deals
+      responses:
+        '200':
+          description: List of yellow sticker deals
   /api/v1/ai/receipt-scan:
     post:
       summary: Multimodal receipt OCR extraction
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                image_base64:
-                  type: string
       responses:
         '200':
           description: Extracted receipt line items
-
+  /api/v1/ai/yellow-sticker-scan:
+    post:
+      summary: Multimodal yellow sticker clearance extraction
+      responses:
+        '200':
+          description: Extracted yellow sticker deal
+  /api/v1/admin/db/reset:
+    post:
+      summary: Admin wipe and coordinate re-seed
+      security:
+        - AdminSecret: []
+      responses:
+        '200':
+          description: Reset summary

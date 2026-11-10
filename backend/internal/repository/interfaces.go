@@ -24,8 +24,10 @@ type PriceRepository interface {
 	GetStorePrices(ctx context.Context, productID string) ([]domain.PriceRecord, error)
 	GetLatestPrice(ctx context.Context, productID, storeID string) (*domain.PriceRecord, error)
 	SubmitPrice(ctx context.Context, record domain.PriceRecord) error
-	ConfirmFreshness(ctx context.Context, productID, storeID string) error
+	ConfirmFreshness(ctx context.Context, productID, storeID, userID string) (int, error)
 	GetAllPrices(ctx context.Context) ([]domain.PriceRecord, error)
+	GetSubmissionsByUser(ctx context.Context, userID string) ([]domain.PriceRecord, error)
+	GetBestDealsSingleQuery(ctx context.Context, lat, lon, radiusKm float64, category string) ([]domain.ProductDealSummary, error)
 }
 
 type BountyRepository interface {
@@ -42,5 +44,29 @@ type CategoryRepository interface {
 type YellowStickerRepository interface {
 	GetActive(ctx context.Context, storeID string) ([]domain.YellowStickerDeal, error)
 	Create(ctx context.Context, deal domain.YellowStickerDeal) error
+}
+
+type SessionRepository interface {
+	UpsertUser(ctx context.Context, user domain.UserProfileRecord) (*domain.UserProfileRecord, error)
+	GetUserProfile(ctx context.Context, userID string) (*domain.UserProfileRecord, error)
+	IncrementUserStats(ctx context.Context, userID string, karmaDelta, reportedDelta, verifiedDelta int) error
+	SaveSession(ctx context.Context, sess domain.AuthSessionRecord) error
+	GetSession(ctx context.Context, token string) (*domain.AuthSessionRecord, error)
+	DeleteSession(ctx context.Context, token string) error
+	PurgeExpiredSessions(ctx context.Context) (int64, error)
+}
+
+type EvidenceRepository interface {
+	SaveEvidence(ctx context.Context, ev domain.EvidenceRecord) (string, error)
+}
+
+type DiscrepancyRepository interface {
+	RecordDiscrepancy(ctx context.Context, report *domain.StoreDiscrepancyReport) (int, error)
+	UpdateStoreReliability(ctx context.Context, storeID string, score int) error
+}
+
+type OutboxRepository interface {
+	FetchPending(ctx context.Context, limit int) ([]domain.OutboxEvent, error)
+	MarkProcessed(ctx context.Context, id string) error
 }
 

@@ -98,6 +98,7 @@ fun ProductDetailScreen(
     }
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     ProductDetailContent(
         uiState = uiState,
@@ -106,7 +107,20 @@ fun ProductDetailScreen(
                 is ProductDetailUiEvent.OnBackClicked -> onNavigateBack()
                 is ProductDetailUiEvent.OnSubmitPriceClicked -> onNavigateToSubmitPrice(productId)
                 is ProductDetailUiEvent.OnStoreClicked -> onNavigateToStore(event.storeId)
-                is ProductDetailUiEvent.OnShareClicked -> { /* TODO share intent */ }
+                is ProductDetailUiEvent.OnShareClicked -> {
+                    val prod = uiState.product
+                    val best = uiState.storePrices.minByOrNull { it.price }
+                    val shareText = if (prod != null && best != null) {
+                        "${prod.name} (${prod.quantityDescription}) — ${best.currencySymbol}${"%.2f".format(best.price)} at ${best.storeName} (via Price Bridge)"
+                    } else {
+                        "Check local store prices on Price Bridge!"
+                    }
+                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                    }
+                    context.startActivity(android.content.Intent.createChooser(intent, "Share Price"))
+                }
                 else -> viewModel.onEvent(event)
             }
         },

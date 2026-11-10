@@ -35,8 +35,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,23 +49,78 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.data.PriceBridgeRepositoryProvider
-import com.example.core.model.ShoppingBasket
+import com.example.core.network.ApiClient
+import com.example.core.network.NetworkBasketItem
+import com.example.core.network.NetworkBasketOptimizeRequest
+import com.example.core.network.NetworkTwoStopBasketResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TwoStopBasketScreen(
     onNavigateBack: () -> Unit
 ) {
-    val basket by PriceBridgeRepositoryProvider.repository.getShoppingBasket()
+    val repository = PriceBridgeRepositoryProvider.repository
+    val basket by repository.getShoppingBasket()
         .collectAsState(initial = null)
 
-    val items = basket?.items ?: emptyList()
-    val singleStoreTotal = basket?.singleStoreEstimatedTotal ?: 640.0
-    val optimizedTotal = basket?.optimizedEstimatedTotal ?: 495.0
-    val rawSavings = if (singleStoreTotal > optimizedTotal) singleStoreTotal - optimizedTotal else 145.0
-    val extraWalkMeters = 280
-    val extraWalkMins = 4
-    val hourlySavingsRate = (rawSavings / (extraWalkMins / 60.0)).toInt()
+    var optimizedResult by remember { mutableStateOf<NetworkTwoStopBasketResult?>(null) }
+
+    LaunchedEffect(basket?.items) {
+        withContext(Dispatchers.IO) {
+            try {
+                val loc = repository.getLocation().firstOrNull()
+                val lat = loc?.latitude?.takeIf { it != 0.0 } ?: 51.5390
+                val lon = loc?.longitude?.takeIf { it != 0.0 } ?: -0.1426
+
+                val basketItems = basket?.items.orEmpty()
+                val reqItems = if (basketItems.isNotEmpty()) {
+                    basketItems.map { item ->
+                        val matchedProd = repository.searchProducts(item.productName, null).firstOrNull()?.firstOrNull()
+                        NetworkBasketItem(
+                            productId = matchedProd?.id ?: item.id,
+                            productName = item.productName,
+                            quantity = item.quantity
+                        )
+                    }
+                } else {
+                    // Use top catalog staples if user's basket is currently empty
+                    repository.getAllProducts().firstOrNull().orEmpty().take(4).map {
+                        NetworkBasketItem(productId = it.id, productName = it.name, quantity = 1)
+                    }
+                }
+
+                if (reqItems.isNotEmpty()) {
+                    optimizedResult = ApiClient.service.optimizeBasket(
+                        NetworkBasketOptimizeRequest(
+                            items = reqItems,
+                            userLat = lat,
+                            userLon = lon
+                        )
+                    )
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    val singleStoreTotal = optimizedResult?.let { it.singleStoreBestPence / 100.0 }
+        ?: basket?.singleStoreEstimatedTotal?.takeIf { it > 0.0 } ?: 0.0
+    val optimizedTotal = optimizedResult?.let { it.combinedTotalPence / 100.0 }
+        ?: basket?.optimizedEstimatedTotal?.takeIf { it > 0.0 } ?: 0.0
+    val rawSavings = optimizedResult?.let { it.netSavingsPence / 100.0 }
+        ?: (singleStoreTotal - optimizedTotal).coerceAtLeast(0.0)
+    val extraWalkMeters = optimizedResult?.walkingDistanceMeters ?: 0
+    val extraWalkMins = (optimizedResult?.estimatedExtraMinutes ?: 1).coerceAtLeast(1)
+    val hourlySavingsRate = if (extraWalkMins > 0) (rawSavings / (extraWalkMins / 60.0)) else 0.0
+
+    val store1Name = optimizedResult?.store1?.name ?: "Primary Store"
+    val store1Total = optimizedResult?.let { it.store1TotalPence / 100.0 } ?: (optimizedTotal * 0.55)
+    val store1ItemsCount = optimizedResult?.store1Items?.size ?: 0
+    val store2Name = optimizedResult?.store2?.name ?: "Secondary Store"
+    val store2Total = optimizedResult?.let { it.store2TotalPence / 100.0 } ?: (optimizedTotal * 0.45)
+    val store2ItemsCount = optimizedResult?.store2Items?.size ?: 0
 
     Scaffold(
         topBar = {
@@ -110,7 +169,7 @@ fun TwoStopBasketScreen(
                     Spacer(Modifier.width(16.dp))
                     Column {
                         Text(
-                            text = "Save ₹%.0f on this Shop!".format(rawSavings),
+                            text = "Save £%.2f on this Shop!".format(rawSavings),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp
@@ -169,7 +228,7 @@ fun TwoStopBasketScreen(
                         Spacer(Modifier.width(8.dp))
                         Column {
                             Text("Effective Hourly Rate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                            Text("₹$hourlySavingsRate / hr", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                            Text("£%.2f / hr".format(hourlySavingsRate), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
                         }
                     }
                 }
@@ -199,7 +258,7 @@ fun TwoStopBasketScreen(
                             Text("1-Store Convenience", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                             Text("Buy all items at primary store", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                         }
-                        Text("₹%.2f".format(singleStoreTotal), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("£%.2f".format(singleStoreTotal), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -227,11 +286,11 @@ fun TwoStopBasketScreen(
                                     Text("RECOMMENDED", color = MaterialTheme.colorScheme.onPrimary, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
                                 }
                             }
-                            Text("Optimized across 2 nearby kiranas", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Optimized across 2 nearby stores", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("₹%.2f".format(optimizedTotal), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                            Text("Save ₹%.0f".format(rawSavings), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                            Text("£%.2f".format(optimizedTotal), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text("Save £%.2f".format(rawSavings), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
                         }
                     }
 
@@ -242,12 +301,16 @@ fun TwoStopBasketScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Default.Storefront, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("Stop 1: Krishna Kirana (Staples & Grains)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = if (store1ItemsCount > 0) "Stop 1: $store1Name ($store1ItemsCount items)" else "Stop 1: $store1Name",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
-                        Text("₹%.2f".format(optimizedTotal * 0.55), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text("£%.2f".format(store1Total), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(Modifier.height(6.dp))
@@ -257,12 +320,16 @@ fun TwoStopBasketScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Default.Storefront, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("Stop 2: Reliance Smart (Oil & Packaged)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = if (store2ItemsCount > 0) "Stop 2: $store2Name ($store2ItemsCount items)" else "Stop 2: $store2Name",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
-                        Text("₹%.2f".format(optimizedTotal * 0.45), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text("£%.2f".format(store2Total), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                     }
                 }
             }

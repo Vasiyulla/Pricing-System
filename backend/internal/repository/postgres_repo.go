@@ -2,29 +2,36 @@ package repository
 
 import (
 	"context"
-	_ "embed"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io/fs"
 	"log"
+	"math"
+	"sort"
 	"strings"
 	"time"
 
+	"pricebridge/backend/internal/domain"
+	"pricebridge/backend/migrations"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"pricebridge/backend/internal/domain"
 )
-
-//go:embed schema.sql
-var schemaSQL string
 
 // PostgresStore coordinates repository implementations backed by PostgreSQL 16 + PostGIS
 type PostgresStore struct {
-	pool               *pgxpool.Pool
-	storeRepo          StoreRepository
-	productRepo        ProductRepository
-	priceRepo          PriceRepository
-	bountyRepo         BountyRepository
-	yellowStickerRepo  YellowStickerRepository
-	categoryRepo       CategoryRepository
+	pool              *pgxpool.Pool
+	storeRepo         StoreRepository
+	productRepo       ProductRepository
+	priceRepo         PriceRepository
+	bountyRepo        BountyRepository
+	yellowStickerRepo YellowStickerRepository
+	categoryRepo      CategoryRepository
+	sessionRepo       SessionRepository
+	evidenceRepo      EvidenceRepository
+	discrepancyRepo   DiscrepancyRepository
+	outboxRepo        OutboxRepository
 }
 
 func NewPostgresStore(ctx context.Context, databaseURL string) (*PostgresStore, error) {
@@ -53,7 +60,7 @@ func NewPostgresStore(ctx context.Context, databaseURL string) (*PostgresStore, 
 
 	log.Printf("[Postgres] Successfully connected to PostgreSQL at %s", config.ConnConfig.Host)
 
-	// Execute Schema Migrations
+	// Execute Versioned Schema Migrations
 	if err := runMigrations(ctx, pool); err != nil {
 		log.Printf("[Postgres] Warning: migration check returned: %v", err)
 	}
@@ -68,6 +75,10 @@ func NewPostgresStore(ctx context.Context, databaseURL string) (*PostgresStore, 
 	store.bountyRepo = &pgBountyRepo{pool: pool}
 	store.yellowStickerRepo = &pgYellowStickerRepo{pool: pool}
 	store.categoryRepo = &pgCategoryRepo{pool: pool}
+	store.sessionRepo = &pgSessionRepo{pool: pool}
+	store.evidenceRepo = &pgEvidenceRepo{pool: pool}
+	store.discrepancyRepo = &pgDiscrepancyRepo{pool: pool}
+	store.outboxRepo = &pgOutboxRepo{pool: pool}
 
 	// Auto-seed if stores table is empty
 	if err := store.seedIfEmpty(ctx); err != nil {
@@ -83,6 +94,10 @@ func (s *PostgresStore) PriceRepo() PriceRepository                 { return s.p
 func (s *PostgresStore) BountyRepo() BountyRepository               { return s.bountyRepo }
 func (s *PostgresStore) YellowStickerRepo() YellowStickerRepository { return s.yellowStickerRepo }
 func (s *PostgresStore) CategoryRepo() CategoryRepository           { return s.categoryRepo }
+func (s *PostgresStore) SessionRepo() SessionRepository             { return s.sessionRepo }
+func (s *PostgresStore) EvidenceRepo() EvidenceRepository           { return s.evidenceRepo }
+func (s *PostgresStore) DiscrepancyRepo() DiscrepancyRepository     { return s.discrepancyRepo }
+func (s *PostgresStore) OutboxRepo() OutboxRepository               { return s.outboxRepo }
 func (s *PostgresStore) Close()                                     { s.pool.Close() }
 func (s *PostgresStore) Ping(ctx context.Context) error             { return s.pool.Ping(ctx) }
 func (s *PostgresStore) Pool() *pgxpool.Pool                        { return s.pool }
@@ -98,12 +113,57 @@ func (r *pgStoreRepo) ExecuteRawSQL(ctx context.Context, sql string) error {
 }
 
 func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {
-	log.Printf("[Postgres] Applying schema migrations...")
-	_, err := pool.Exec(ctx, schemaSQL)
+	_, err := pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version VARCHAR(128) PRIMARY KEY,
+			checksum VARCHAR(64) NOT NULL,
+			applied_at TIMESTAMPTZ DEFAULT NOW()
+		);
+	`)
 	if err != nil {
-		return fmt.Errorf("executing schema.sql failed: %w", err)
+		return fmt.Errorf("creating schema_migrations failed: %w", err)
 	}
-	log.Printf("[Postgres] Schema migrations applied successfully.")
+
+	entries, err := fs.ReadDir(migrations.FS, ".")
+	if err != nil {
+		return fmt.Errorf("reading embedded migrations failed: %w", err)
+	}
+
+	var files []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".up.sql") {
+			files = append(files, entry.Name())
+		}
+	}
+	sort.Strings(files)
+
+	for _, name := range files {
+		sqlBytes, readErr := fs.ReadFile(migrations.FS, name)
+		if readErr != nil {
+			return readErr
+		}
+		sum := sha256.Sum256(sqlBytes)
+		checksum := hex.EncodeToString(sum[:])
+
+		var existingChecksum string
+		err := pool.QueryRow(ctx, "SELECT checksum FROM schema_migrations WHERE version = $1", name).Scan(&existingChecksum)
+		if err == nil && existingChecksum == checksum {
+			continue // Already applied identically
+		}
+
+		log.Printf("[Postgres] Applying versioned migration %s...", name)
+		if _, execErr := pool.Exec(ctx, string(sqlBytes)); execErr != nil {
+			return fmt.Errorf("executing migration %s failed: %w", name, execErr)
+		}
+
+		_, _ = pool.Exec(ctx, `
+			INSERT INTO schema_migrations (version, checksum)
+			VALUES ($1, $2)
+			ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum, applied_at = NOW();
+		`, name, checksum)
+	}
+
+	log.Printf("[Postgres] Versioned schema migrations up to date (%d files).", len(files))
 	return nil
 }
 
@@ -445,19 +505,24 @@ func (r *pgPriceRepo) SubmitPrice(ctx context.Context, record domain.PriceRecord
 		idempotencyKey = &record.IdempotencyKey
 	}
 
+	var submittedBy *string
+	if record.SubmittedByUserID != "" {
+		submittedBy = &record.SubmittedByUserID
+	}
+
 	// Insert into append-only price ledger with ON CONFLICT (idempotency_key) DO NOTHING
 	var newID string
 	err = tx.QueryRow(ctx, `
 		INSERT INTO price_records (
 			product_id, store_id, regular_price_pence, loyalty_price_pence,
 			loyalty_scheme, effective_price_pence, source_type, freshness_status,
-			idempotency_key, observed_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+			idempotency_key, submitted_by_user_id, evidence_id, observed_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::uuid, NOW())
 		ON CONFLICT (idempotency_key) DO NOTHING
 		RETURNING id::text;
 	`, record.ProductID, record.StoreID, record.RegularPricePence, record.LoyaltyPricePence,
 		string(record.LoyaltyScheme), effectivePrice, record.SourceType, string(record.FreshnessStatus),
-		idempotencyKey).Scan(&newID)
+		idempotencyKey, submittedBy, record.EvidenceID).Scan(&newID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			// Duplicate submission with matching idempotency key; commit transaction idempotently
@@ -487,13 +552,46 @@ func (r *pgPriceRepo) SubmitPrice(ctx context.Context, record domain.PriceRecord
 	return tx.Commit(ctx)
 }
 
-func (r *pgPriceRepo) ConfirmFreshness(ctx context.Context, productID, storeID string) error {
+func (r *pgPriceRepo) ConfirmFreshness(ctx context.Context, productID, storeID, userID string) (int, error) {
+	if userID == "" {
+		userID = "anon"
+	}
+
+	// Record user corroboration cleanly (idempotent per user)
 	_, err := r.pool.Exec(ctx, `
+		INSERT INTO freshness_confirmations (product_id, store_id, user_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (product_id, store_id, user_id) DO UPDATE SET confirmed_at = NOW();
+	`, productID, storeID, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	var count int
+	err = r.pool.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT user_id) FROM freshness_confirmations
+		WHERE product_id = $1 AND store_id = $2 AND confirmed_at >= NOW() - INTERVAL '14 days';
+	`, productID, storeID).Scan(&count)
+	if err != nil {
+		count = 1
+	}
+
+	// Promote to COMMUNITY_CORROBORATED only when 2+ independent users confirm; never claim STORE_CONFIRMED
+	newStatus := string(domain.FreshnessRecentlyObserved)
+	if count >= 2 {
+		newStatus = string(domain.FreshnessCommunityCorroborated)
+	}
+
+	_, err = r.pool.Exec(ctx, `
 		UPDATE price_records
-		SET freshness_status = 'STORE_CONFIRMED', observed_at = NOW()
+		SET freshness_status = CASE
+				WHEN freshness_status = 'STORE_CONFIRMED' THEN 'STORE_CONFIRMED'
+				ELSE $3
+			END,
+			observed_at = NOW()
 		WHERE product_id = $1 AND store_id = $2 AND superseded_by IS NULL
-	`, productID, storeID)
-	return err
+	`, productID, storeID, newStatus)
+	return count, err
 }
 
 func (r *pgPriceRepo) GetAllPrices(ctx context.Context) ([]domain.PriceRecord, error) {
@@ -523,6 +621,187 @@ func (r *pgPriceRepo) GetAllPrices(ctx context.Context) ([]domain.PriceRecord, e
 		}
 	}
 	return records, nil
+}
+
+func formatRelativeAge(t *time.Time) string {
+	if t == nil {
+		return "Recently"
+	}
+	diff := time.Since(*t)
+	switch {
+	case diff < time.Minute:
+		return "Just now"
+	case diff < time.Hour:
+		return fmt.Sprintf("%d mins ago", int(diff.Minutes()))
+	case diff < 24*time.Hour:
+		h := int(diff.Hours())
+		if h == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", h)
+	default:
+		d := int(diff.Hours() / 24)
+		if d == 1 {
+			return "1 day ago"
+		}
+		return fmt.Sprintf("%d days ago", d)
+	}
+}
+
+func (r *pgPriceRepo) GetSubmissionsByUser(ctx context.Context, userID string) ([]domain.PriceRecord, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT pr.id::text, pr.product_id, COALESCE(p.name, pr.product_id), pr.store_id, COALESCE(s.name, pr.store_id),
+		       pr.regular_price_pence, pr.loyalty_price_pence, pr.loyalty_scheme,
+		       pr.freshness_status, pr.source_type, pr.observed_at
+		FROM price_records pr
+		LEFT JOIN products p ON pr.product_id = p.id
+		LEFT JOIN stores s ON pr.store_id = s.id
+		WHERE pr.submitted_by_user_id = $1
+		ORDER BY pr.observed_at DESC
+		LIMIT 50;
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []domain.PriceRecord
+	for rows.Next() {
+		var pr domain.PriceRecord
+		var scheme, freshness string
+		if err := rows.Scan(&pr.ID, &pr.ProductID, &pr.ProductName, &pr.StoreID, &pr.StoreName,
+			&pr.RegularPricePence, &pr.LoyaltyPricePence, &scheme,
+			&freshness, &pr.SourceType, &pr.ObservedAt); err == nil {
+			pr.LoyaltyScheme = domain.LoyaltyScheme(scheme)
+			pr.FreshnessStatus = domain.FreshnessStatus(freshness)
+			records = append(records, pr)
+		}
+	}
+	return records, nil
+}
+
+// GetBestDealsSingleQuery resolves products and their cheapest nearby store prices in one SQL round-trip,
+// completely eliminating N+1 queries on the deals endpoint.
+func (r *pgPriceRepo) GetBestDealsSingleQuery(ctx context.Context, lat, lon, radiusKm float64, category string) ([]domain.ProductDealSummary, error) {
+	radiusMeters := radiusKm * 1000.0
+	query := `
+		WITH nearby_stores AS (
+			SELECT id, chain, format, name, address, postcode,
+			       ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon,
+			       (ST_Distance(geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) / 1000.0) AS distance_km,
+			       reliability_score, is_confirmed_partner
+			FROM stores
+			WHERE ST_DWithin(geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
+		),
+		latest_prices AS (
+			SELECT DISTINCT ON (pr.product_id, pr.store_id)
+			       pr.product_id, pr.store_id, pr.regular_price_pence, pr.loyalty_price_pence,
+			       pr.loyalty_scheme, pr.effective_price_pence, pr.freshness_status, pr.observed_at
+			FROM price_records pr
+			JOIN nearby_stores s ON pr.store_id = s.id
+			WHERE pr.superseded_by IS NULL
+			ORDER BY pr.product_id, pr.store_id, pr.observed_at DESC
+		)
+		SELECT p.id, p.name, p.brand, COALESCE(p.barcode, ''), p.category, p.package_size, p.unit_metric, p.target_mrp_gbp::float8,
+		       s.id, s.chain, s.format, s.name, s.address, s.postcode, s.lat, s.lon, ROUND(s.distance_km::numeric, 2)::float8,
+		       lp.regular_price_pence, lp.loyalty_price_pence, lp.loyalty_scheme, lp.effective_price_pence, lp.freshness_status, lp.observed_at
+		FROM products p
+		LEFT JOIN latest_prices lp ON p.id = lp.product_id
+		LEFT JOIN nearby_stores s ON lp.store_id = s.id
+		WHERE ($4 = '' OR p.category = $4)
+		ORDER BY p.name ASC, lp.effective_price_pence ASC NULLS LAST;
+	`
+
+	rows, err := r.pool.Query(ctx, query, lat, lon, radiusMeters, category)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	grouped := make(map[string]*domain.ProductDealSummary)
+	var order []string
+
+	for rows.Next() {
+		var prod domain.Product
+		var storeID, chain, format, storeName, address, postcode *string
+		var sLat, sLon, sDist *float64
+		var regPence, effPence *int
+		var loyPence *int
+		var loyScheme, freshness *string
+		var obsAt *time.Time
+
+		if err := rows.Scan(
+			&prod.ID, &prod.Name, &prod.Brand, &prod.Barcode, &prod.Category, &prod.PackageSize, &prod.UnitMetric, &prod.TargetMRP,
+			&storeID, &chain, &format, &storeName, &address, &postcode, &sLat, &sLon, &sDist,
+			&regPence, &loyPence, &loyScheme, &effPence, &freshness, &obsAt,
+		); err != nil {
+			continue
+		}
+
+		summary, exists := grouped[prod.ID]
+		if !exists {
+			summary = &domain.ProductDealSummary{
+				Product:             prod,
+				BestPricePence:      int(math.Round(prod.TargetMRP * 100)),
+				BestPriceGBP:        fmt.Sprintf("£%.2f", prod.TargetMRP),
+				BestStoreName:       "Nearby Supermarket",
+				BestStoreDistanceKm: 0.5,
+				FreshnessStatus:     domain.FreshnessRecentlyObserved,
+			}
+			grouped[prod.ID] = summary
+			order = append(order, prod.ID)
+		}
+
+		if storeID != nil && effPence != nil {
+			comp := domain.StorePriceComparison{
+				Store: domain.Store{
+					ID:         *storeID,
+					Chain:      domain.StoreChain(*chain),
+					Format:     domain.StoreFormat(*format),
+					Name:       *storeName,
+					Address:    *address,
+					Postcode:   *postcode,
+					Latitude:   *sLat,
+					Longitude:  *sLon,
+					DistanceKm: *sDist,
+				},
+				RegularPricePence:   *regPence,
+				RegularPriceGBP:     fmt.Sprintf("£%.2f", float64(*regPence)/100.0),
+				LoyaltyPricePence:   loyPence,
+				LoyaltyScheme:       domain.LoyaltyScheme(*loyScheme),
+				EffectivePricePence: *effPence,
+				UnitPricePence:      domain.ComputeUnitPricePence(*effPence, prod.PackageSize),
+				UnitPriceFormatted:  fmt.Sprintf("£%.2f/unit", float64(domain.ComputeUnitPricePence(*effPence, prod.PackageSize))/100.0),
+				FreshnessStatus:     domain.FreshnessStatus(*freshness),
+				ObservedAgo:         formatRelativeAge(obsAt),
+			}
+			if loyPence != nil {
+				s := fmt.Sprintf("£%.2f", float64(*loyPence)/100.0)
+				comp.LoyaltyPriceGBP = &s
+			}
+			if len(summary.Alternatives) == 0 {
+				comp.IsBestDeal = true
+				summary.BestPricePence = *effPence
+				summary.BestPriceGBP = fmt.Sprintf("£%.2f", float64(*effPence)/100.0)
+				summary.BestStoreName = *storeName
+				summary.BestStoreID = *storeID
+				summary.BestStoreDistanceKm = *sDist
+				summary.FreshnessStatus = comp.FreshnessStatus
+			}
+			summary.Alternatives = append(summary.Alternatives, comp)
+			summary.ComparedStoreCount = len(summary.Alternatives)
+		}
+	}
+
+	out := make([]domain.ProductDealSummary, 0, len(order))
+	for _, id := range order {
+		s := grouped[id]
+		if s.ComparedStoreCount == 0 {
+			s.ComparedStoreCount = 1
+		}
+		out = append(out, *s)
+	}
+	return out, nil
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -710,3 +989,204 @@ func (r *pgCategoryRepo) GetAll(ctx context.Context) ([]domain.Category, error) 
 	return categories, nil
 }
 
+// ─────────────────────────────────────────────────────────────
+// SESSION & USER REPOSITORY IMPLEMENTATION
+// ─────────────────────────────────────────────────────────────
+
+type pgSessionRepo struct {
+	pool *pgxpool.Pool
+}
+
+func (r *pgSessionRepo) UpsertUser(ctx context.Context, user domain.UserProfileRecord) (*domain.UserProfileRecord, error) {
+	if user.KarmaPoints == 0 {
+		user.KarmaPoints = 50
+	}
+	if user.Role == "" {
+		user.Role = "ActiveContributor"
+	}
+	row := r.pool.QueryRow(ctx, `
+		INSERT INTO users (id, email, display_name, avatar_url, role, karma_points, auth_mode)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (id) DO UPDATE SET
+			email = EXCLUDED.email,
+			display_name = CASE WHEN EXCLUDED.display_name != '' THEN EXCLUDED.display_name ELSE users.display_name END,
+			avatar_url = CASE WHEN EXCLUDED.avatar_url != '' THEN EXCLUDED.avatar_url ELSE users.avatar_url END,
+			updated_at = NOW()
+		RETURNING id, email, display_name, avatar_url, role, karma_points, prices_reported, prices_verified, auth_mode;
+	`, user.ID, user.Email, user.DisplayName, user.AvatarURL, user.Role, user.KarmaPoints, user.AuthMode)
+
+	var out domain.UserProfileRecord
+	if err := row.Scan(&out.ID, &out.Email, &out.DisplayName, &out.AvatarURL, &out.Role,
+		&out.KarmaPoints, &out.PricesReported, &out.PricesVerified, &out.AuthMode); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (r *pgSessionRepo) GetUserProfile(ctx context.Context, userID string) (*domain.UserProfileRecord, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT id, email, display_name, avatar_url, role, karma_points, prices_reported, prices_verified, auth_mode
+		FROM users WHERE id = $1;
+	`, userID)
+	var out domain.UserProfileRecord
+	if err := row.Scan(&out.ID, &out.Email, &out.DisplayName, &out.AvatarURL, &out.Role,
+		&out.KarmaPoints, &out.PricesReported, &out.PricesVerified, &out.AuthMode); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (r *pgSessionRepo) IncrementUserStats(ctx context.Context, userID string, karmaDelta, reportedDelta, verifiedDelta int) error {
+	if userID == "" {
+		return nil
+	}
+	_, err := r.pool.Exec(ctx, `
+		UPDATE users
+		SET karma_points = karma_points + $2,
+		    prices_reported = prices_reported + $3,
+		    prices_verified = prices_verified + $4,
+		    updated_at = NOW()
+		WHERE id = $1;
+	`, userID, karmaDelta, reportedDelta, verifiedDelta)
+	return err
+}
+
+func (r *pgSessionRepo) SaveSession(ctx context.Context, sess domain.AuthSessionRecord) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO sessions (token, user_id, email, display_name, role, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (token) DO UPDATE SET
+			expires_at = EXCLUDED.expires_at,
+			display_name = EXCLUDED.display_name;
+	`, sess.Token, sess.UserID, sess.Email, sess.DisplayName, sess.Role, sess.ExpiresAt)
+	return err
+}
+
+func (r *pgSessionRepo) GetSession(ctx context.Context, token string) (*domain.AuthSessionRecord, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT token, user_id, email, display_name, role, expires_at
+		FROM sessions
+		WHERE token = $1 AND expires_at > NOW();
+	`, token)
+	var sess domain.AuthSessionRecord
+	if err := row.Scan(&sess.Token, &sess.UserID, &sess.Email, &sess.DisplayName, &sess.Role, &sess.ExpiresAt); err != nil {
+		return nil, err
+	}
+	return &sess, nil
+}
+
+func (r *pgSessionRepo) DeleteSession(ctx context.Context, token string) error {
+	_, err := r.pool.Exec(ctx, "DELETE FROM sessions WHERE token = $1", token)
+	return err
+}
+
+func (r *pgSessionRepo) PurgeExpiredSessions(ctx context.Context) (int64, error) {
+	tag, err := r.pool.Exec(ctx, "DELETE FROM sessions WHERE expires_at <= NOW()")
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// ─────────────────────────────────────────────────────────────
+// EVIDENCE REPOSITORY IMPLEMENTATION (Object Storage Metadata)
+// ─────────────────────────────────────────────────────────────
+
+type pgEvidenceRepo struct {
+	pool *pgxpool.Pool
+}
+
+func (r *pgEvidenceRepo) SaveEvidence(ctx context.Context, ev domain.EvidenceRecord) (string, error) {
+	var prodID *string
+	if ev.ProductID != "" {
+		prodID = &ev.ProductID
+	}
+	var storeID *string
+	if ev.StoreID != "" {
+		storeID = &ev.StoreID
+	}
+	var id string
+	err := r.pool.QueryRow(ctx, `
+		INSERT INTO evidence (user_id, product_id, store_id, source_type, object_key, evidence_url, image_hash, exif_stripped, ocr_raw_text)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING id::text;
+	`, ev.UserID, prodID, storeID, ev.SourceType, ev.ObjectKey, ev.EvidenceURL, ev.ImageHash, ev.ExifStripped, ev.OcrRawText).Scan(&id)
+	return id, err
+}
+
+// ─────────────────────────────────────────────────────────────
+// DISCREPANCY REPOSITORY IMPLEMENTATION
+// ─────────────────────────────────────────────────────────────
+
+type pgDiscrepancyRepo struct {
+	pool *pgxpool.Pool
+}
+
+func (r *pgDiscrepancyRepo) RecordDiscrepancy(ctx context.Context, report *domain.StoreDiscrepancyReport) (int, error) {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO store_discrepancies (store_id, reporter_id, reason, details, user_latitude, user_longitude, reported_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		ON CONFLICT (store_id, reporter_id, reason) DO UPDATE SET
+			details = EXCLUDED.details,
+			reported_at = NOW();
+	`, report.StoreID, report.ReporterID, report.Reason, report.Details, report.UserLatitude, report.UserLongitude)
+	if err != nil {
+		return 0, err
+	}
+
+	var independentCount int
+	err = r.pool.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT reporter_id) FROM store_discrepancies
+		WHERE store_id = $1 AND reported_at >= NOW() - INTERVAL '30 days';
+	`, report.StoreID).Scan(&independentCount)
+	return independentCount, err
+}
+
+func (r *pgDiscrepancyRepo) UpdateStoreReliability(ctx context.Context, storeID string, score int) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE stores
+		SET reliability_score = $2,
+		    is_confirmed_partner = CASE WHEN $2 < 60 THEN FALSE ELSE is_confirmed_partner END
+		WHERE id = $1;
+	`, storeID, score)
+	return err
+}
+
+// ─────────────────────────────────────────────────────────────
+// TRANSACTIONAL OUTBOX REPOSITORY IMPLEMENTATION
+// ─────────────────────────────────────────────────────────────
+
+type pgOutboxRepo struct {
+	pool *pgxpool.Pool
+}
+
+func (r *pgOutboxRepo) FetchPending(ctx context.Context, limit int) ([]domain.OutboxEvent, error) {
+	if limit <= 0 {
+		limit = 25
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT id::text, event_type, aggregate_type, aggregate_id, payload::text, created_at
+		FROM outbox_events
+		WHERE processed_at IS NULL
+		ORDER BY created_at ASC
+		LIMIT $1;
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []domain.OutboxEvent
+	for rows.Next() {
+		var ev domain.OutboxEvent
+		if err := rows.Scan(&ev.ID, &ev.EventType, &ev.AggregateType, &ev.AggregateID, &ev.PayloadJSON, &ev.CreatedAt); err == nil {
+			events = append(events, ev)
+		}
+	}
+	return events, nil
+}
+
+func (r *pgOutboxRepo) MarkProcessed(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx, "UPDATE outbox_events SET processed_at = NOW() WHERE id = $1::uuid", id)
+	return err
+}

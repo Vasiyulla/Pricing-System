@@ -54,36 +54,40 @@ def health():
         "gemini_configured": bool(GEMINI_API_KEY)
     }
 
+def _extract_with_gemini_vision(prompt: str, image_b64: Optional[str]) -> Optional[dict]:
+    """Runs Gemini 2.0 Flash Vision extraction and parses strict JSON output."""
+    if not GEMINI_API_KEY or not image_b64:
+        return None
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.0-flash")
+
+        clean_b64 = image_b64.split(",", 1)[1] if "," in image_b64 else image_b64
+        image_data = base64.b64decode(clean_b64)
+
+        response = model.generate_content(
+            [prompt, {"mime_type": "image/jpeg", "data": image_data}],
+            generation_config={"response_mime_type": "application/json"}
+        )
+        return json.loads(response.text)
+    except Exception:
+        return None
+
+
 @app.post("/extract-receipt", response_model=ReceiptExtractionResponse)
 async def extract_receipt(payload: ImagePayload):
     """
     Extracts structured UK supermarket receipts.
     Uses Gemini 2.0 Flash Vision if key present, else high-fidelity UK seed extraction.
     """
-    if GEMINI_API_KEY and payload.image_base64:
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel("gemini-2.0-flash")
-
-            clean_b64 = payload.image_base64
-            if "," in clean_b64:
-                clean_b64 = clean_b64.split(",")[1]
-            image_data = base64.b64decode(clean_b64)
-
-            prompt = """Extract store name, branch number, UK VAT number, date, total in pence, and line items.
-            Return strict JSON matching the ReceiptExtractionResponse schema."""
-
-            response = model.generate_content([
-                prompt,
-                {"mime_type": "image/jpeg", "data": image_data}
-            ], generation_config={"response_mime_type": "application/json"})
-
-            parsed = json.loads(response.text)
-            return parsed
-        except Exception as e:
-            # Fallback to local verified extraction
-            pass
+    parsed = _extract_with_gemini_vision(
+        """Extract store name, branch number, UK VAT number, date, total in pence, and line items.
+        Return strict JSON matching the ReceiptExtractionResponse schema.""",
+        payload.image_base64,
+    )
+    if parsed:
+        return parsed
 
     # Default verified UK Supermarket receipt
     return ReceiptExtractionResponse(
@@ -141,8 +145,18 @@ async def extract_receipt(payload: ImagePayload):
 @app.post("/extract-yellow-sticker", response_model=YellowStickerResponse)
 async def extract_yellow_sticker(payload: ImagePayload):
     """
-    Extracts UK 'Yellow Sticker' clearance markdown label
+    Extracts UK 'Yellow Sticker' clearance markdown label using Gemini Vision when configured.
     """
+    parsed = _extract_with_gemini_vision(
+        """Extract UK supermarket yellow sticker clearance markdown details:
+        id (generate short unique string), store_name, product_name,
+        was_price_pence (int), now_price_pence (int), discount_percent (int), use_by_date (string).
+        Return strict JSON matching YellowStickerResponse.""",
+        payload.image_base64,
+    )
+    if parsed:
+        return parsed
+
     return YellowStickerResponse(
         id="ys_live_01",
         store_name="M&S Foodhall Covent Garden",

@@ -1,7 +1,12 @@
 package com.example.core.data
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
 import com.example.core.data.local.PriceBridgeDatabase
+import com.example.core.data.local.entity.BasketItemEntity
 import com.example.core.data.local.entity.CachedCategoryEntity
 import com.example.core.data.local.entity.CachedDealEntity
 import com.example.core.data.local.entity.CachedProductEntity
@@ -35,6 +40,7 @@ import com.example.core.network.NetworkProduct
 import com.example.core.network.NetworkStore
 import com.example.core.network.NetworkStorePriceComparison
 import com.example.core.session.AppSessionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,7 +50,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.UUID
 
 /**
@@ -137,6 +146,19 @@ class NetworkPriceBridgeRepository(
 
     private val dismissedPromptId = MutableStateFlow<String?>(null)
 
+    init {
+        scope.launch {
+            try {
+                val savedItems = database?.basketItemDao()?.getAllItems()?.map { it.toShoppingListItem() } ?: emptyList()
+                if (savedItems.isNotEmpty()) {
+                    shoppingBasketState.update { basket ->
+                        recalculateBasketState(basket.copy(items = savedItems))
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     // ── Location & Feed ──
 
     override fun getLocation(): Flow<LocationInfo> = currentLocation.asStateFlow()
@@ -147,7 +169,8 @@ class NetworkPriceBridgeRepository(
         // Step 1: Immediately emit cached categories from Room if available
         val cached = try {
             database?.cachedCategoryDao()?.getAllCategories()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             null
         }
         if (!cached.isNullOrEmpty()) {
@@ -155,7 +178,7 @@ class NetworkPriceBridgeRepository(
         }
 
         // Step 2: Fetch fresh categories from backend and update cache
-        try {
+        val netResult: List<Category>? = try {
             val netCats = api.service.getCategories()
             if (netCats.isNotEmpty()) {
                 val categories = netCats.map { Category(id = it.id, name = it.name) }
@@ -163,36 +186,42 @@ class NetworkPriceBridgeRepository(
                     database?.cachedCategoryDao()?.insertCategories(
                         netCats.map { CachedCategoryEntity(id = it.id, name = it.name) }
                     )
-                } catch (_: Exception) {}
-                emit(categories)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                }
+                categories
             } else if (cached.isNullOrEmpty()) {
-                emit(listOf(Category(id = "all", name = "All")))
+                listOf(Category(id = "all", name = "All"))
+            } else {
+                null
             }
-        } catch (_: Exception) {
-            if (cached.isNullOrEmpty()) {
-                emit(listOf(Category(id = "all", name = "All")))
-            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            if (cached.isNullOrEmpty()) listOf(Category(id = "all", name = "All")) else null
+        }
+        if (netResult != null) {
+            emit(netResult)
         }
     }.flowOn(Dispatchers.IO)
 
     override fun getKarmaPrompt(): Flow<KarmaVerificationPrompt?> = flow {
-        try {
+        val result: KarmaVerificationPrompt? = try {
             val prompt = api.service.getActiveBountyPrompt()
             if (prompt != null && prompt.bountyId.isNotEmpty() && prompt.bountyId != dismissedPromptId.value) {
-                emit(
-                    KarmaVerificationPrompt(
-                        id = prompt.bountyId,
-                        storeName = prompt.storeName,
-                        description = "Is ${prompt.productName} still ${prompt.lastObservedPrice} at ${prompt.storeName}? Verify shelf tag to earn Karma points!",
-                        karmaRewardPoints = prompt.rewardPoints
-                    )
+                KarmaVerificationPrompt(
+                    id = prompt.bountyId,
+                    storeName = prompt.storeName,
+                    description = "Is ${prompt.productName} still ${prompt.lastObservedPrice} at ${prompt.storeName}? Verify shelf tag to earn Karma points!",
+                    karmaRewardPoints = prompt.rewardPoints
                 )
             } else {
-                emit(null)
+                null
             }
-        } catch (_: Exception) {
-            emit(null)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            null
         }
+        emit(result)
     }.flowOn(Dispatchers.IO)
 
     override fun getBestDeals(categoryId: String?): Flow<List<Product>> = flow {
@@ -203,7 +232,8 @@ class NetworkPriceBridgeRepository(
             } else {
                 database?.cachedDealDao()?.getDealsByCategorySync(categoryId)?.map { it.toProduct() } ?: emptyList()
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emptyList()
         }
         if (cached.isNotEmpty()) {
@@ -211,14 +241,14 @@ class NetworkPriceBridgeRepository(
         }
 
         // Step 2: Fetch live single-query batch deals from backend
-        try {
+        val liveProducts: List<Product>? = try {
             val netDeals = api.service.getBestDealsBatch(
                 lat = currentLat,
                 lon = currentLon,
                 category = if (categoryId == "all") null else categoryId
             )
             if (netDeals.isNotEmpty()) {
-                val liveProducts = netDeals.map { deal ->
+                val mapped = netDeals.map { deal ->
                     val alternatives = deal.alternatives.map { it.toStorePrice() }
                     val bestStorePrice = StorePrice(
                         storeId = deal.bestStoreId,
@@ -240,13 +270,20 @@ class NetworkPriceBridgeRepository(
                 }
                 // Persist live products to Room database cache
                 try {
-                    database?.cachedDealDao()?.insertDeals(liveProducts.map { CachedDealEntity.fromProduct(it) })
-                } catch (_: Exception) {}
-
-                emit(liveProducts)
+                    database?.cachedDealDao()?.insertDeals(mapped.map { CachedDealEntity.fromProduct(it) })
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                }
+                mapped
+            } else {
+                null
             }
-        } catch (_: Exception) {
-            // Keep displaying cached deals gracefully if offline
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            null // Keep displaying cached deals gracefully if offline
+        }
+        if (liveProducts != null) {
+            emit(liveProducts)
         }
     }.flowOn(Dispatchers.IO)
 
@@ -254,7 +291,7 @@ class NetworkPriceBridgeRepository(
 
     override fun searchProducts(query: String, categoryId: String?): Flow<List<Product>> = flow {
         val actualCategory = if (categoryId == "all" || categoryId.isNullOrEmpty()) null else categoryId
-        try {
+        val result: List<Product> = try {
             val netProducts = api.service.searchProducts(
                 query = query,
                 category = actualCategory
@@ -265,7 +302,8 @@ class NetworkPriceBridgeRepository(
                     val storePrices = comps.map { it.toStorePrice() }
                     val best = storePrices.minByOrNull { it.price }
                     netProd.toProduct(bestPrice = best, comparedCount = comps.size, alternatives = storePrices)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     netProd.toProduct()
                 }
             }
@@ -275,10 +313,13 @@ class NetworkPriceBridgeRepository(
                 database?.cachedProductDao()?.insertProducts(
                     products.map { CachedProductEntity.fromProduct(it) }
                 )
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
 
-            emit(products)
+            products
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             // Offline fallback: Query Room cache
             val cached = try {
                 if (actualCategory != null) {
@@ -288,12 +329,13 @@ class NetworkPriceBridgeRepository(
                 } else {
                     database?.cachedProductDao()?.getAllProducts()
                 }
-            } catch (_: Exception) {
+            } catch (e2: Exception) {
+                if (e2 is CancellationException) throw e2
                 null
             } ?: emptyList()
 
             if (cached.isNotEmpty()) {
-                emit(cached.map { it.toProduct() })
+                cached.map { it.toProduct() }
             } else {
                 val cachedDeals = try {
                     if (actualCategory != null) {
@@ -301,7 +343,8 @@ class NetworkPriceBridgeRepository(
                     } else {
                         database?.cachedDealDao()?.getAllDealsSync()
                     }
-                } catch (_: Exception) {
+                } catch (e2: Exception) {
+                    if (e2 is CancellationException) throw e2
                     null
                 } ?: emptyList()
 
@@ -310,13 +353,14 @@ class NetworkPriceBridgeRepository(
                 } else {
                     cachedDeals
                 }
-                emit(filteredDeals.map { it.toProduct() })
+                filteredDeals.map { it.toProduct() }
             }
         }
+        emit(result)
     }.flowOn(Dispatchers.IO)
 
     override fun getProductByBarcode(barcode: String): Flow<Product?> = flow {
-        try {
+        val result: Product? = try {
             val netProd = api.service.getProductByBarcode(barcode)
             val comps = api.service.compareProductPrices(netProd.id, currentLat, currentLon)
             val storePrices = comps.map { it.toStorePrice() }
@@ -324,16 +368,21 @@ class NetworkPriceBridgeRepository(
             val product = netProd.toProduct(bestPrice = best, comparedCount = comps.size, alternatives = storePrices)
             try {
                 database?.cachedProductDao()?.insertProduct(CachedProductEntity.fromProduct(product))
-            } catch (_: Exception) {}
-            emit(product)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+            product
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             val cached = try {
                 database?.cachedProductDao()?.getProductByBarcode(barcode)
-            } catch (_: Exception) {
+            } catch (e2: Exception) {
+                if (e2 is CancellationException) throw e2
                 null
             }
-            emit(cached?.toProduct())
+            cached?.toProduct()
         }
+        emit(result)
     }.flowOn(Dispatchers.IO)
 
     override fun getRecentSearches(): Flow<List<String>> = recentSearches.asStateFlow()
@@ -348,7 +397,7 @@ class NetworkPriceBridgeRepository(
     // ── Product Details & Store Prices ──
 
     override fun getProductById(productId: String): Flow<Product?> = flow {
-        try {
+        val result: Product? = try {
             val netProd = api.service.getProductById(productId)
             val comps = api.service.compareProductPrices(productId, currentLat, currentLon)
             val storePrices = comps.map { it.toStorePrice() }
@@ -356,120 +405,173 @@ class NetworkPriceBridgeRepository(
             val product = netProd.toProduct(bestPrice = best, comparedCount = comps.size, alternatives = storePrices)
             try {
                 database?.cachedProductDao()?.insertProduct(CachedProductEntity.fromProduct(product))
-            } catch (_: Exception) {}
-            emit(product)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+            product
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             val cached = try {
                 database?.cachedProductDao()?.getProductById(productId)
-            } catch (_: Exception) {
+            } catch (e2: Exception) {
+                if (e2 is CancellationException) throw e2
                 null
             }
             if (cached != null) {
-                emit(cached.toProduct())
+                cached.toProduct()
             } else {
                 val deal = try {
                     database?.cachedDealDao()?.getAllDealsSync()?.find { it.id == productId }
-                } catch (_: Exception) {
+                } catch (e2: Exception) {
+                    if (e2 is CancellationException) throw e2
                     null
                 }
-                emit(deal?.toProduct())
+                deal?.toProduct()
             }
         }
+        emit(result)
     }.flowOn(Dispatchers.IO)
 
     override fun getStorePricesForProduct(productId: String): Flow<List<StorePrice>> = flow {
-        try {
+        val result: List<StorePrice> = try {
             val comps = api.service.compareProductPrices(productId, currentLat, currentLon)
-            emit(comps.map { it.toStorePrice() })
+            comps.map { it.toStorePrice() }
         } catch (e: Exception) {
-            emit(emptyList())
+            if (e is CancellationException) throw e
+            emptyList()
         }
+        emit(result)
     }.flowOn(Dispatchers.IO)
 
     override suspend fun addProduct(product: Product): String {
-        return product.id
+        val payload = mapOf(
+            "id" to product.id,
+            "name" to product.name,
+            "brand" to product.name.split(" ").firstOrNull().orEmpty(),
+            "barcode" to (product.barcode ?: ""),
+            "category" to product.categoryId,
+            "package_size" to product.quantityDescription,
+            "unit_metric" to "unit",
+            "target_mrp_gbp" to (product.bestStorePrice?.mrp ?: product.bestStorePrice?.price ?: 0.0)
+        )
+        val created = withContext(Dispatchers.IO) { api.service.createProduct(payload) }
+        val persistedProduct = created.toProduct()
+        try {
+            database?.cachedProductDao()?.insertProduct(CachedProductEntity.fromProduct(persistedProduct))
+        } catch (_: Exception) {}
+        return created.id
     }
 
     override suspend fun confirmPriceFreshness(productId: String, storeId: String) {
-        // Confirmed
+        withContext(Dispatchers.IO) {
+            api.service.confirmPriceFreshness(
+                mapOf("product_id" to productId, "store_id" to storeId)
+            )
+        }
     }
 
     override suspend fun reportDiscrepancy(productId: String, storeId: String, reason: String, notes: String?) {
-        // Reported
+        withContext(Dispatchers.IO) {
+            api.service.reportStoreDiscrepancy(
+                storeId = storeId,
+                payload = mapOf(
+                    "reason" to reason,
+                    "details" to (notes ?: "Reported for product $productId"),
+                    "user_latitude" to currentLat,
+                    "user_longitude" to currentLon
+                )
+            )
+        }
     }
 
     // ── Stores ──
 
     override fun getNearbyStores(): Flow<List<Store>> = flow {
-        try {
+        val result: List<Store> = try {
             val netStores = api.service.getNearbyStores(lat = currentLat, lon = currentLon, radiusKm = 10.0)
             val stores = netStores.map { it.toStore() }
             try {
                 database?.cachedStoreDao()?.insertStores(
                     stores.map { CachedStoreEntity.fromStore(it) }
                 )
-            } catch (_: Exception) {}
-            emit(stores)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+            stores
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             val cached = try {
                 database?.cachedStoreDao()?.getAllStores()
-            } catch (_: Exception) {
+            } catch (e2: Exception) {
+                if (e2 is CancellationException) throw e2
                 null
             } ?: emptyList()
-            emit(cached.map { it.toStore() })
+            cached.map { it.toStore() }
         }
+        emit(result)
     }.flowOn(Dispatchers.IO)
 
     override fun getAllProducts(): Flow<List<Product>> = flow {
-        try {
+        val result: List<Product> = try {
             val netProducts = api.service.searchProducts("")
             val products = netProducts.map { it.toProduct() }
             try {
                 database?.cachedProductDao()?.insertProducts(
                     products.map { CachedProductEntity.fromProduct(it) }
                 )
-            } catch (_: Exception) {}
-            emit(products)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+            products
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             val cached = try {
                 database?.cachedProductDao()?.getAllProducts()
-            } catch (_: Exception) {
+            } catch (e2: Exception) {
+                if (e2 is CancellationException) throw e2
                 null
             } ?: emptyList()
 
             if (cached.isNotEmpty()) {
-                emit(cached.map { it.toProduct() })
+                cached.map { it.toProduct() }
             } else {
                 val deals = try {
                     database?.cachedDealDao()?.getAllDealsSync()
-                } catch (_: Exception) {
+                } catch (e2: Exception) {
+                    if (e2 is CancellationException) throw e2
                     null
                 } ?: emptyList()
-                emit(deals.map { it.toProduct() })
+                deals.map { it.toProduct() }
             }
         }
+        emit(result)
     }.flowOn(Dispatchers.IO)
 
     override fun getStoreById(storeId: String): Flow<Store?> = flow {
-        try {
+        val result: Store? = try {
             val netStore = api.service.getStoreById(storeId)
             val store = netStore.toStore()
             try {
                 database?.cachedStoreDao()?.insertStore(CachedStoreEntity.fromStore(store))
-            } catch (_: Exception) {}
-            emit(store)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+            store
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             val cached = try {
                 database?.cachedStoreDao()?.getStoreById(storeId)
-            } catch (_: Exception) {
+            } catch (e2: Exception) {
+                if (e2 is CancellationException) throw e2
                 null
             }
-            emit(cached?.toStore())
+            cached?.toStore()
         }
+        emit(result)
     }.flowOn(Dispatchers.IO)
 
     override fun getStorePrices(storeId: String): Flow<List<StorePrice>> = flow {
-        try {
+        val result: List<StorePrice> = try {
             val netProducts = api.service.searchProducts("")
             val results = mutableListOf<StorePrice>()
             for (p in netProducts) {
@@ -479,12 +581,16 @@ class NetworkPriceBridgeRepository(
                     if (match != null) {
                         results.add(match.toStorePrice())
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                }
             }
-            emit(results)
+            results
         } catch (e: Exception) {
-            emit(emptyList())
+            if (e is CancellationException) throw e
+            emptyList()
         }
+        emit(result)
     }.flowOn(Dispatchers.IO)
 
     // ── Price Submission ──
@@ -494,7 +600,8 @@ class NetworkPriceBridgeRepository(
         storeId: String,
         price: Double,
         mrp: Double,
-        sourceType: String
+        sourceType: String,
+        evidenceId: String?
     ) {
         val pence = (price * 100).toInt()
         val idempotencyKey = "sub_${UUID.randomUUID()}"
@@ -503,7 +610,8 @@ class NetworkPriceBridgeRepository(
             storeId = storeId,
             regularPricePence = pence,
             sourceType = sourceType,
-            idempotencyKey = idempotencyKey
+            idempotencyKey = idempotencyKey,
+            evidenceId = evidenceId
         )
         api.service.submitPrice(payload, idempotencyKey)
 
@@ -521,6 +629,60 @@ class NetworkPriceBridgeRepository(
                     statusBadge = PriceStatusBadgeType.RecentlyObserved
                 )
             ) + history
+        }
+    }
+
+    override suspend fun uploadEvidence(
+        productId: String?,
+        storeId: String?,
+        sourceType: String,
+        imagePath: String,
+        ocrRawText: String
+    ): String? = withContext(Dispatchers.IO) {
+        try {
+            val bitmap: Bitmap? = when {
+                imagePath.startsWith("content://") -> {
+                    val ctx = context ?: PriceBridgeDatabase.appContext
+                    ctx?.contentResolver?.openInputStream(Uri.parse(imagePath))?.use { stream ->
+                        BitmapFactory.decodeStream(stream)
+                    }
+                }
+                else -> {
+                    val f = File(imagePath)
+                    if (f.exists()) BitmapFactory.decodeFile(f.absolutePath) else null
+                }
+            }
+            if (bitmap == null) return@withContext null
+
+            val maxDim = 1280
+            val scale = minOf(1f, maxDim.toFloat() / maxOf(bitmap.width, bitmap.height).coerceAtLeast(1))
+            val scaled = if (scale < 1f) {
+                Bitmap.createScaledBitmap(
+                    bitmap,
+                    (bitmap.width * scale).toInt().coerceAtLeast(1),
+                    (bitmap.height * scale).toInt().coerceAtLeast(1),
+                    true
+                )
+            } else {
+                bitmap
+            }
+
+            val baos = ByteArrayOutputStream()
+            scaled.compress(Bitmap.CompressFormat.JPEG, 80, baos)
+            val b64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+
+            val resp = api.service.uploadEvidence(
+                buildMap {
+                    put("source_type", sourceType)
+                    put("image_base64", b64)
+                    put("ocr_raw_text", ocrRawText)
+                    if (!productId.isNullOrBlank()) put("product_id", productId)
+                    if (!storeId.isNullOrBlank()) put("store_id", storeId)
+                }
+            )
+            resp.evidenceId
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -666,22 +828,38 @@ class NetworkPriceBridgeRepository(
     override fun getShoppingBasket(): Flow<ShoppingBasket> = shoppingBasketState.asStateFlow()
 
     override suspend fun toggleItemChecked(itemId: String) {
+        var updatedItem: ShoppingListItem? = null
         shoppingBasketState.update { basket ->
             recalculateBasketState(basket.copy(
                 items = basket.items.map {
-                    if (it.id == itemId) it.copy(isChecked = !it.isChecked) else it
+                    if (it.id == itemId) {
+                        val toggled = it.copy(isChecked = !it.isChecked)
+                        updatedItem = toggled
+                        toggled
+                    } else it
                 }
             ))
+        }
+        updatedItem?.let { item ->
+            try { database?.basketItemDao()?.upsertItem(BasketItemEntity.fromShoppingListItem(item)) } catch (_: Exception) {}
         }
     }
 
     override suspend fun updateItemQuantity(itemId: String, newQuantity: Int) {
+        var updatedItem: ShoppingListItem? = null
         shoppingBasketState.update { basket ->
             recalculateBasketState(basket.copy(
                 items = basket.items.map {
-                    if (it.id == itemId) it.copy(quantity = newQuantity) else it
+                    if (it.id == itemId) {
+                        val mod = it.copy(quantity = newQuantity)
+                        updatedItem = mod
+                        mod
+                    } else it
                 }
             ))
+        }
+        updatedItem?.let { item ->
+            try { database?.basketItemDao()?.upsertItem(BasketItemEntity.fromShoppingListItem(item)) } catch (_: Exception) {}
         }
     }
 
@@ -727,22 +905,41 @@ class NetworkPriceBridgeRepository(
         shoppingBasketState.update { basket ->
             recalculateBasketState(basket.copy(items = basket.items + newItem))
         }
+        try { database?.basketItemDao()?.upsertItem(BasketItemEntity.fromShoppingListItem(newItem)) } catch (_: Exception) {}
     }
 
     override suspend fun deleteShoppingItem(itemId: String) {
         shoppingBasketState.update { basket ->
             recalculateBasketState(basket.copy(items = basket.items.filter { it.id != itemId }))
         }
+        try { database?.basketItemDao()?.deleteItem(itemId) } catch (_: Exception) {}
     }
 
     override suspend fun clearCheckedItems() {
         shoppingBasketState.update { basket ->
             recalculateBasketState(basket.copy(items = basket.items.filter { !it.isChecked }))
         }
+        try { database?.basketItemDao()?.deleteCheckedItems() } catch (_: Exception) {}
     }
 
     override fun getSavedShoppingLists(): Flow<List<SavedShoppingList>> = flow {
-        emit(emptyList())
+        val current = shoppingBasketState.value
+        if (current.items.isNotEmpty()) {
+            emit(
+                listOf(
+                    SavedShoppingList(
+                        id = "active_basket",
+                        title = current.title,
+                        itemCount = current.items.sumOf { it.quantity },
+                        estimatedTotal = current.singleStoreEstimatedTotal,
+                        isRecurring = false,
+                        lastRunDate = "Active"
+                    )
+                )
+            )
+        } else {
+            emit(emptyList())
+        }
     }
 
     override fun getPriceWatchAlerts(): Flow<List<PriceWatchAlert>> = flow {
@@ -753,9 +950,50 @@ class NetworkPriceBridgeRepository(
 
     // ── Profile & Auth ──
 
-    override fun getUserProfile(): Flow<UserProfile> = AppSessionManager.userProfile
+    override fun getUserProfile(): Flow<UserProfile> = flow {
+        val base = AppSessionManager.userProfile.value
+        emit(base)
+        if (AppSessionManager.isLoggedIn.value && AppSessionManager.getAuthToken().isNotBlank()) {
+            try {
+                val stats = withContext(Dispatchers.IO) { api.service.getMyProfile() }
+                AppSessionManager.updateStats(
+                    karmaPoints = stats.karmaPoints,
+                    pricesReported = stats.pricesReported,
+                    pricesVerified = stats.pricesVerified
+                )
+            } catch (_: Exception) {}
+        }
+        AppSessionManager.userProfile.collect { emit(it) }
+    }.flowOn(Dispatchers.IO)
 
-    override fun getSubmissionHistory(): Flow<List<PriceSubmission>> = submissionHistory.asStateFlow()
+    override fun getSubmissionHistory(): Flow<List<PriceSubmission>> = flow {
+        emit(submissionHistory.value)
+        if (AppSessionManager.isLoggedIn.value && AppSessionManager.getAuthToken().isNotBlank()) {
+            try {
+                val records = withContext(Dispatchers.IO) { api.service.getMySubmissions() }
+                val mapped = records.map { rec ->
+                    PriceSubmission(
+                        id = rec.id,
+                        productName = rec.productName.ifBlank { rec.productId },
+                        storeName = rec.storeName.ifBlank { rec.storeId },
+                        price = rec.regularPricePence / 100.0,
+                        mrp = rec.regularPricePence / 100.0,
+                        currencySymbol = "£",
+                        sourceType = rec.sourceType,
+                        submittedRelativeTime = "Recorded",
+                        statusBadge = when (rec.freshnessStatus) {
+                            "STORE_CONFIRMED" -> PriceStatusBadgeType.StoreConfirmed
+                            "COMMUNITY_CORROBORATED" -> PriceStatusBadgeType.CommunityCorroborated
+                            "PRICE_MAY_BE_OUTDATED" -> PriceStatusBadgeType.PriceMayBeOutdated
+                            else -> PriceStatusBadgeType.RecentlyObserved
+                        }
+                    )
+                }
+                submissionHistory.value = mapped
+            } catch (_: Exception) {}
+        }
+        submissionHistory.collect { emit(it) }
+    }.flowOn(Dispatchers.IO)
 
     override fun isUserLoggedIn(): Flow<Boolean> = AppSessionManager.isLoggedIn
 
@@ -818,6 +1056,11 @@ class NetworkPriceBridgeRepository(
     }
 
     override suspend fun logout() {
+        try {
+            if (AppSessionManager.getAuthToken().isNotBlank()) {
+                withContext(Dispatchers.IO) { api.service.logout() }
+            }
+        } catch (_: Exception) {}
         try {
             com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
         } catch (_: Exception) {}
@@ -912,9 +1155,9 @@ class NetworkPriceBridgeRepository(
     }
 
     override fun getActiveYellowStickers(): Flow<List<com.example.feature.yellowsticker.YellowStickerItem>> = flow {
-        try {
+        val result: List<com.example.feature.yellowsticker.YellowStickerItem> = try {
             val netDeals = api.service.getActiveYellowStickers()
-            val items = netDeals.map { deal ->
+            netDeals.map { deal ->
                 val was = String.format(java.util.Locale.UK, "£%.2f", deal.wasPricePence / 100.0)
                 val now = String.format(java.util.Locale.UK, "£%.2f", deal.nowPricePence / 100.0)
                 com.example.feature.yellowsticker.YellowStickerItem(
@@ -927,16 +1170,17 @@ class NetworkPriceBridgeRepository(
                     hoursRemaining = 4
                 )
             }
-            emit(items)
-        } catch (_: Exception) {
-            emit(emptyList())
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            emptyList()
         }
+        emit(result)
     }.flowOn(Dispatchers.IO)
 
     override fun getNearbyBounties(): Flow<List<com.example.feature.bounty.BountyItem>> = flow {
-        try {
+        val result: List<com.example.feature.bounty.BountyItem> = try {
             val netBounties = api.service.getNearbyBounties(currentLat, currentLon)
-            val items = netBounties.map { b ->
+            netBounties.map { b ->
                 val distStr = if (b.distanceKm < 1.0) "${(b.distanceKm * 1000).toInt()}m away" else "%.1f km away".format(b.distanceKm)
                 com.example.feature.bounty.BountyItem(
                     id = b.id,
@@ -946,10 +1190,11 @@ class NetworkPriceBridgeRepository(
                     distance = distStr
                 )
             }
-            emit(items)
-        } catch (_: Exception) {
-            emit(emptyList())
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            emptyList()
         }
+        emit(result)
     }.flowOn(Dispatchers.IO)
 
     override suspend fun claimBounty(bountyId: String): Boolean {

@@ -10,10 +10,12 @@ import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.example.core.data.PriceBridgeRepositoryProvider
 import com.example.core.data.local.PriceBridgeDatabase
 import com.example.core.data.local.entity.QueuedSubmissionEntity
 import com.example.core.network.ApiClient
 import com.example.core.network.NetworkPriceSubmission
+import com.example.core.session.AppSessionManager
 import retrofit2.HttpException
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -29,6 +31,10 @@ class PriceSyncWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
+        // Hydrate SharedPreferences session token cleanly if WorkManager woke in a fresh process
+        AppSessionManager.init(applicationContext)
+        PriceBridgeRepositoryProvider.init(applicationContext)
+
         val database = PriceBridgeDatabase.getInstance(applicationContext)
         val dao = database.queuedSubmissionDao()
         val pendingSubmissions = dao.getPendingSubmissions()
@@ -49,13 +55,25 @@ class PriceSyncWorker(
             )
 
             try {
+                val evidenceId = item.evidencePhotoUri
+                    ?.takeIf { it.isNotBlank() && !it.startsWith("sample_") && !it.startsWith("photo_captured_") }
+                    ?.let { uri ->
+                        PriceBridgeRepositoryProvider.repository.uploadEvidence(
+                            productId = item.productId,
+                            storeId = item.storeId,
+                            sourceType = item.sourceType,
+                            imagePath = uri
+                        )
+                    }
+
                 val pence = (item.price * 100).toInt()
                 val payload = NetworkPriceSubmission(
                     productId = item.productId,
                     storeId = item.storeId,
                     regularPricePence = pence,
                     sourceType = item.sourceType,
-                    idempotencyKey = item.idempotencyKey
+                    idempotencyKey = item.idempotencyKey,
+                    evidenceId = evidenceId
                 )
 
                 ApiClient.service.submitPrice(

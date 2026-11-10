@@ -85,7 +85,7 @@ class AddProductViewModel(
         viewModelScope.launch {
             try {
                 val mrpVal = state.mrpText.toDoubleOrNull() ?: 0.0
-                val productId = "prod_${UUID.randomUUID()}"
+                val productId = "prod_${UUID.randomUUID().toString().take(12)}"
                 val newProduct = Product(
                     id = productId,
                     name = state.name.trim(),
@@ -94,7 +94,7 @@ class AddProductViewModel(
                     packageSizeBadge = state.packageSize.trim().take(8),
                     imageUrl = "",
                     bestStorePrice = StorePrice(
-                        storeId = "nilgiris_indiranagar",
+                        storeId = "store_tesco_camden",
                         storeName = "Awaiting first submission",
                         distanceFormatted = "--",
                         price = mrpVal,
@@ -109,8 +109,8 @@ class AddProductViewModel(
                     barcode = state.barcode.trim().takeIf { it.isNotBlank() }
                 )
 
-                repository.addProduct(newProduct)
-                _uiState.update { it.copy(isSubmitting = false, createdProductId = productId) }
+                val createdId = repository.addProduct(newProduct)
+                _uiState.update { it.copy(isSubmitting = false, createdProductId = createdId) }
             } catch (ex: Exception) {
                 _uiState.update {
                     it.copy(

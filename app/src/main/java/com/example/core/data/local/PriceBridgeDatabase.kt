@@ -4,11 +4,13 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.example.core.data.local.dao.BasketItemDao
 import com.example.core.data.local.dao.CachedCategoryDao
 import com.example.core.data.local.dao.CachedDealDao
 import com.example.core.data.local.dao.CachedProductDao
 import com.example.core.data.local.dao.CachedStoreDao
 import com.example.core.data.local.dao.QueuedSubmissionDao
+import com.example.core.data.local.entity.BasketItemEntity
 import com.example.core.data.local.entity.CachedCategoryEntity
 import com.example.core.data.local.entity.CachedDealEntity
 import com.example.core.data.local.entity.CachedProductEntity
@@ -16,7 +18,7 @@ import com.example.core.data.local.entity.CachedStoreEntity
 import com.example.core.data.local.entity.QueuedSubmissionEntity
 
 /**
- * Main Room database for Price Bridge local cache and offline submission queue.
+ * Main Room database for Price Bridge local cache, basket state, and offline submission queue.
  */
 @Database(
     entities = [
@@ -24,9 +26,10 @@ import com.example.core.data.local.entity.QueuedSubmissionEntity
         CachedDealEntity::class,
         CachedProductEntity::class,
         CachedStoreEntity::class,
-        CachedCategoryEntity::class
+        CachedCategoryEntity::class,
+        BasketItemEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class PriceBridgeDatabase : RoomDatabase() {
@@ -36,6 +39,7 @@ abstract class PriceBridgeDatabase : RoomDatabase() {
     abstract fun cachedProductDao(): CachedProductDao
     abstract fun cachedStoreDao(): CachedStoreDao
     abstract fun cachedCategoryDao(): CachedCategoryDao
+    abstract fun basketItemDao(): BasketItemDao
 
     companion object {
         @Volatile
@@ -53,7 +57,7 @@ abstract class PriceBridgeDatabase : RoomDatabase() {
                     PriceBridgeDatabase::class.java,
                     "price_bridge_database"
                 )
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration(true)
                     .build()
                 INSTANCE = instance
                 instance

@@ -23,13 +23,19 @@ type StoreVerifier interface {
 }
 
 type storeVerifierImpl struct {
-	storeRepo  repository.StoreRepository
-	httpClient *http.Client
+	storeRepo       repository.StoreRepository
+	discrepancyRepo repository.DiscrepancyRepository
+	httpClient      *http.Client
 }
 
-func NewStoreVerifier(storeRepo repository.StoreRepository) StoreVerifier {
+func NewStoreVerifier(storeRepo repository.StoreRepository, discrepancyRepo ...repository.DiscrepancyRepository) StoreVerifier {
+	var discRepo repository.DiscrepancyRepository
+	if len(discrepancyRepo) > 0 {
+		discRepo = discrepancyRepo[0]
+	}
 	return &storeVerifierImpl{
-		storeRepo: storeRepo,
+		storeRepo:       storeRepo,
+		discrepancyRepo: discRepo,
 		httpClient: &http.Client{
 			Timeout: 6 * time.Second,
 		},
@@ -265,7 +271,8 @@ func (v *storeVerifierImpl) checkOSMOverpassAPI(ctx context.Context, name string
 	return nil
 }
 
-// ReportDiscrepancy handles user reporting a store that is closed or missing
+// ReportDiscrepancy handles user reporting a store discrepancy or closure.
+// Per AGENTS.md policy: One complaint never punishes a store; 2+ independent reports are required.
 func (v *storeVerifierImpl) ReportDiscrepancy(ctx context.Context, report *domain.StoreDiscrepancyReport) (*domain.StoreVerificationResult, error) {
 	st, err := v.storeRepo.GetByID(ctx, report.StoreID)
 	if err != nil {
@@ -274,42 +281,60 @@ func (v *storeVerifierImpl) ReportDiscrepancy(ctx context.Context, report *domai
 
 	log.Printf("[StoreDiscrepancy] Store '%s' (%s) reported: reason=%s, reporter=%s", st.Name, st.ID, report.Reason, report.ReporterID)
 
-	// Calculate distance of reporter to store
 	dist := haversineDistanceMeters(report.UserLatitude, report.UserLongitude, st.Latitude, st.Longitude)
 
-	// Degrade reliability score based on proximity and severity
-	penalty := 15
-	if report.Reason == "STORE_CLOSED" || report.Reason == "NOT_HERE" {
-		penalty = 25
-	}
-	// If reporter is close (<150m), weight the complaint higher
-	if dist <= 150.0 {
-		penalty += 10
+	independentReporters := 1
+	if v.discrepancyRepo != nil {
+		if count, recErr := v.discrepancyRepo.RecordDiscrepancy(ctx, report); recErr == nil && count > 0 {
+			independentReporters = count
+		}
 	}
 
-	st.ReliabilityScore -= penalty
-	if st.ReliabilityScore < 0 {
-		st.ReliabilityScore = 0
+	score := st.ReliabilityScore
+	if score == 0 {
+		score = 95
 	}
 
 	status := domain.StoreStatusVerifiedChain
 	warning := ""
 
-	if st.ReliabilityScore < 60 {
-		status = domain.StoreStatusFlaggedInactive
-		warning = "Store has multiple closure/existence discrepancies reported. Flagged for admin verification."
-	} else if st.ReliabilityScore < 80 {
-		warning = "Recent visitors reported this store may be closed or relocated."
+	// Enforce anti-abuse policy: only apply reliability penalty after 2+ independent reporters
+	if independentReporters >= 2 {
+		penalty := 15
+		if report.Reason == "STORE_CLOSED" || report.Reason == "NOT_HERE" {
+			penalty = 25
+		}
+		if dist <= 150.0 {
+			penalty += 10
+		}
+
+		score -= penalty
+		if score < 0 {
+			score = 0
+		}
+
+		if v.discrepancyRepo != nil {
+			_ = v.discrepancyRepo.UpdateStoreReliability(ctx, st.ID, score)
+		}
+
+		if score < 60 {
+			status = domain.StoreStatusFlaggedInactive
+			warning = fmt.Sprintf("%d independent shoppers reported discrepancies. Store flagged for operator review.", independentReporters)
+		} else if score < 80 {
+			warning = "Multiple independent visitors reported discrepancies at this store."
+		}
+	} else {
+		warning = "Thank you for reporting. Discrepancy logged for corroboration by another shopper."
 	}
 
 	return &domain.StoreVerificationResult{
 		StoreID:             st.ID,
 		StoreName:           st.Name,
 		Status:              status,
-		ConfidenceScore:     st.ReliabilityScore,
+		ConfidenceScore:     score,
 		MatchedSource:       "DISCREPANCY_AUDIT",
 		DistanceMeters:      dist,
-		IsConfirmedLocation: st.ReliabilityScore >= 60,
+		IsConfirmedLocation: score >= 60,
 		Warning:             warning,
 	}, nil
 }

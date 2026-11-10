@@ -101,6 +101,86 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 );
 CREATE INDEX IF NOT EXISTS idx_outbox_unprocessed ON outbox_events(created_at) WHERE processed_at IS NULL;
 
+-- 8. Users & Reputation Ledger
+CREATE TABLE IF NOT EXISTS users (
+    id VARCHAR(128) PRIMARY KEY,
+    email VARCHAR(256) NOT NULL,
+    display_name VARCHAR(128) NOT NULL,
+    avatar_url TEXT DEFAULT '',
+    role VARCHAR(64) DEFAULT 'ActiveContributor',
+    karma_points INT DEFAULT 50,
+    prices_reported INT DEFAULT 0,
+    prices_verified INT DEFAULT 0,
+    auth_mode VARCHAR(32) DEFAULT 'NEON_EMAIL',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 9. Persistent Auth Sessions (Survives Backend Restarts & Hibernation)
+CREATE TABLE IF NOT EXISTS sessions (
+    token VARCHAR(256) PRIMARY KEY,
+    user_id VARCHAR(128) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    email VARCHAR(256) NOT NULL,
+    display_name VARCHAR(128) NOT NULL,
+    role VARCHAR(64) DEFAULT 'ActiveContributor',
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+-- 10. EXIF-Stripped Evidence Storage (Shelf Tags & Receipts)
+CREATE TABLE IF NOT EXISTS evidence (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id VARCHAR(128),
+    product_id VARCHAR(64) REFERENCES products(id) ON DELETE SET NULL,
+    store_id VARCHAR(64) REFERENCES stores(id) ON DELETE SET NULL,
+    source_type VARCHAR(32) DEFAULT 'shelf_label',
+    image_base64 TEXT NOT NULL,
+    image_hash VARCHAR(64),
+    exif_stripped BOOLEAN DEFAULT TRUE,
+    ocr_raw_text TEXT DEFAULT '',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_evidence_hash ON evidence(image_hash);
+
+-- 11. Store Discrepancy Reports (Anti-Abuse Independent Reporter Tracking)
+CREATE TABLE IF NOT EXISTS store_discrepancies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id VARCHAR(64) NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    reporter_id VARCHAR(128) NOT NULL,
+    reason VARCHAR(64) NOT NULL,
+    details TEXT DEFAULT '',
+    user_latitude DOUBLE PRECISION DEFAULT 0,
+    user_longitude DOUBLE PRECISION DEFAULT 0,
+    reported_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(store_id, reporter_id, reason)
+);
+CREATE INDEX IF NOT EXISTS idx_discrepancies_store ON store_discrepancies(store_id, reported_at DESC);
+
+-- 12. Community Price Freshness Corroborations (2+ Independent Users -> COMMUNITY_CORROBORATED)
+CREATE TABLE IF NOT EXISTS freshness_confirmations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id VARCHAR(64) NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    store_id VARCHAR(64) NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    user_id VARCHAR(128) NOT NULL,
+    confirmed_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(product_id, store_id, user_id)
+);
+
+-- 13. Saved Shopping Lists
+CREATE TABLE IF NOT EXISTS saved_lists (
+    id VARCHAR(64) PRIMARY KEY,
+    user_id VARCHAR(128) NOT NULL,
+    title VARCHAR(128) NOT NULL,
+    items_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Upgrade price_records safely with attribution & evidence pointers
+ALTER TABLE price_records ADD COLUMN IF NOT EXISTS submitted_by_user_id VARCHAR(128);
+ALTER TABLE price_records ADD COLUMN IF NOT EXISTS evidence_id UUID;
+
 -- ─────────────────────────────────────────────────────────────
 -- ACTUAL SEED DATA IN DATABASE (Zero Hardcoded Data in Clients)
 -- ─────────────────────────────────────────────────────────────

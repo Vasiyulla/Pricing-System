@@ -106,6 +106,15 @@ object AppSessionManager {
         )
     }
 
+    fun updateStats(karmaPoints: Int, pricesReported: Int, pricesVerified: Int) {
+        prefs?.edit()?.putInt(KEY_KARMA_POINTS, karmaPoints)?.apply()
+        _userProfile.value = _userProfile.value.copy(
+            karmaPoints = karmaPoints,
+            pricesReported = pricesReported,
+            pricesVerified = pricesVerified
+        )
+    }
+
     fun logout() {
         _isLoggedIn.value = false
         prefs?.edit()?.clear()?.apply()
@@ -138,17 +147,17 @@ object AppSessionManager {
             return listOf(
                 SavedAddress(
                     label = "Home",
-                    addressLine = "Flat 402, Green Glen Layout",
-                    locality = "Bellandur, Bengaluru",
-                    latitude = 12.9279,
-                    longitude = 77.6711
+                    addressLine = "42 Camden High Street",
+                    locality = "Camden Town, London NW1",
+                    latitude = 51.5390,
+                    longitude = -0.1426
                 ),
                 SavedAddress(
                     label = "Work",
-                    addressLine = "Ecospace Business Park, Outer Ring Rd",
-                    locality = "Bellandur, Bengaluru",
-                    latitude = 12.9260,
-                    longitude = 77.6833
+                    addressLine = "10 Pancras Square",
+                    locality = "King's Cross, London N1C",
+                    latitude = 51.5339,
+                    longitude = -0.1257
                 )
             )
         }

@@ -134,6 +134,7 @@ type Product struct {
 type PriceRecord struct {
 	ID                string          `json:"id"`
 	ProductID         string          `json:"product_id"`
+	ProductName       string          `json:"product_name,omitempty"`
 	StoreID           string          `json:"store_id"`
 	StoreName         string          `json:"store_name"`
 	RegularPricePence int             `json:"regular_price_pence"` // in pence (e.g. 245 = £2.45)
@@ -146,6 +147,8 @@ type PriceRecord struct {
 	ObservedAt        time.Time       `json:"observed_at"`
 	SupersededBy      *string         `json:"superseded_by,omitempty"`
 	IdempotencyKey    string          `json:"idempotency_key,omitempty"`
+	SubmittedByUserID string          `json:"submitted_by_user_id,omitempty"`
+	EvidenceID        *string         `json:"evidence_id,omitempty"`
 }
 
 // StorePriceComparison summarizes price comparison across stores for a product
@@ -269,15 +272,62 @@ type UserSession struct {
 
 // ProductDealSummary represents a product with its best nearby supermarket deal
 type ProductDealSummary struct {
-	Product             Product               `json:"product"`
-	BestPricePence      int                   `json:"best_price_pence"`
-	BestPriceGBP        string                `json:"best_price_gbp"`
-	BestStoreName       string                `json:"best_store_name"`
-	BestStoreID         string                `json:"best_store_id"`
-	BestStoreDistanceKm float64               `json:"best_store_distance_km"`
-	ComparedStoreCount  int                   `json:"compared_store_count"`
-	FreshnessStatus     FreshnessStatus       `json:"freshness_status"`
+	Product             Product                `json:"product"`
+	BestPricePence      int                    `json:"best_price_pence"`
+	BestPriceGBP        string                 `json:"best_price_gbp"`
+	BestStoreName       string                 `json:"best_store_name"`
+	BestStoreID         string                 `json:"best_store_id"`
+	BestStoreDistanceKm float64                `json:"best_store_distance_km"`
+	ComparedStoreCount  int                    `json:"compared_store_count"`
+	FreshnessStatus     FreshnessStatus        `json:"freshness_status"`
 	Alternatives        []StorePriceComparison `json:"alternatives,omitempty"`
+}
+
+// UserProfileRecord represents persisted user reputation and karma telemetry
+type UserProfileRecord struct {
+	ID             string `json:"id"`
+	Email          string `json:"email"`
+	DisplayName    string `json:"display_name"`
+	AvatarURL      string `json:"avatar_url"`
+	Role           string `json:"role"`
+	KarmaPoints    int    `json:"karma_points"`
+	PricesReported int    `json:"prices_reported"`
+	PricesVerified int    `json:"prices_verified"`
+	AuthMode       string `json:"auth_mode"`
+}
+
+// AuthSessionRecord persists active session bearer tokens across server restarts
+type AuthSessionRecord struct {
+	Token       string    `json:"token"`
+	UserID      string    `json:"user_id"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name"`
+	Role        string    `json:"role"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+// EvidenceRecord represents an EXIF-stripped shelf tag or receipt photo stored in Object Storage
+type EvidenceRecord struct {
+	ID           string `json:"id"`
+	UserID       string `json:"user_id"`
+	ProductID    string `json:"product_id,omitempty"`
+	StoreID      string `json:"store_id,omitempty"`
+	SourceType   string `json:"source_type"`
+	ObjectKey    string `json:"object_key"`
+	EvidenceURL  string `json:"evidence_url"`
+	ImageHash    string `json:"image_hash"`
+	ExifStripped bool   `json:"exif_stripped"`
+	OcrRawText   string `json:"ocr_raw_text,omitempty"`
+}
+
+// OutboxEvent represents a transactional event awaiting async processing
+type OutboxEvent struct {
+	ID            string    `json:"id"`
+	EventType     string    `json:"event_type"`
+	AggregateType string    `json:"aggregate_type"`
+	AggregateID   string    `json:"aggregate_id"`
+	PayloadJSON   string    `json:"payload"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 

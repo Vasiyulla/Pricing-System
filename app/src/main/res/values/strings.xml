@@ -66,9 +66,9 @@
     <string name="capture_retake">Retake</string>
     <string name="capture_form_title">Add Price Details</string>
     <string name="capture_product_name_label">Product Name</string>
-    <string name="capture_product_name_placeholder">e.g. Fortune Sunlite Sunflower Oil</string>
+    <string name="capture_product_name_placeholder">e.g. Lurpak Spreadable Butter 500g</string>
     <string name="capture_store_name_label">Store Name</string>
-    <string name="capture_store_name_placeholder">e.g. More Supermarket, Indiranagar</string>
+    <string name="capture_store_name_placeholder">e.g. Tesco Express, Camden</string>
     <string name="capture_price_label">Selling Price (£)</string>
     <string name="capture_unit_label">Pack Size / Unit</string>
     <string name="capture_evidence_type_label">Evidence Type</string>
@@ -93,7 +93,7 @@
 
     <!-- Shopping List / Smart Basket (Product Rule Compliant) -->
     <string name="shopping_list_title">Smart Shopping Basket</string>
-    <string name="shopping_list_subtitle">%1$d items · Indiranagar cluster</string>
+    <string name="shopping_list_subtitle">%1$d items · Local area stores</string>
     <string name="label_estimated_total">Estimated total</string>
     <string name="label_single_store_total">Single-store estimated: £%1$.2f</string>
     <string name="label_savings_optimized">Save ~£%1$.0f with store split</string>
