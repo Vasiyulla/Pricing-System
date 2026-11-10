@@ -19,14 +19,15 @@ RUN apk --no-cache add ca-certificates tzdata wget && \
 WORKDIR /app
 RUN mkdir -p /app/data/evidence && chown -R appuser:appgroup /app
 
-COPY --from=builder /app/api ./api
-COPY --from=builder /app/worker ./worker
+COPY --from=builder --chown=appuser:appgroup /app/api /app/api
+COPY --from=builder --chown=appuser:appgroup /app/worker /app/worker
+RUN chmod 755 /app/api /app/worker && ln -sf /app/api /app/server
 
 USER appuser:appgroup
 
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8080/health || exit 1
+  CMD wget -qO- http://127.0.0.1:${PORT:-8080}/health || exit 1
 
-CMD ["./api"]
+CMD ["/app/api"]
