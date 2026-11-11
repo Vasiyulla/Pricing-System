@@ -10,24 +10,20 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/api ./cmd/api/main.go && \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/worker ./cmd/worker/main.go
 
-# Minimal runtime image running as non-root user
+# Minimal runtime image
 FROM alpine:3.20
 
-RUN apk --no-cache add ca-certificates tzdata wget && \
-    addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
-RUN mkdir -p /app/data/evidence && chown -R appuser:appgroup /app
+RUN mkdir -p /app/data/evidence
 
-COPY --from=builder --chown=appuser:appgroup /app/api /app/api
-COPY --from=builder --chown=appuser:appgroup /app/worker /app/worker
-RUN chmod 755 /app/api /app/worker && ln -sf /app/api /app/server
-
-USER appuser:appgroup
+COPY --from=builder /app/api /app/api
+COPY --from=builder /app/worker /app/worker
+RUN chmod 755 /app/api /app/worker && \
+    ln -sf /app/api /app/server && \
+    mkdir -p /root && ln -sf /app/api /root/server
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:${PORT:-8080}/health || exit 1
-
-CMD ["/app/api"]
+CMD ["/bin/sh", "-c", "echo '[boot] launching /app/api on port '${PORT:-8080}; exec /app/api"]
