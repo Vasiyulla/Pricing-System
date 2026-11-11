@@ -59,13 +59,11 @@ func NewStoreHandler(
 }
 
 func (h *StoreHandler) GetNearby(w http.ResponseWriter, r *http.Request) {
-	lat, err := strconv.ParseFloat(r.URL.Query().Get("lat"), 64)
-	if err != nil {
-		lat = 51.5390
-	}
-	lon, err := strconv.ParseFloat(r.URL.Query().Get("lon"), 64)
-	if err != nil {
-		lon = -0.1426
+	lat, latErr := strconv.ParseFloat(r.URL.Query().Get("lat"), 64)
+	lon, lonErr := strconv.ParseFloat(r.URL.Query().Get("lon"), 64)
+	if latErr != nil || lonErr != nil || (lat == 0 && lon == 0) {
+		respond.JSON(w, http.StatusOK, []domain.Store{})
+		return
 	}
 	radiusKm, err := strconv.ParseFloat(r.URL.Query().Get("radius_km"), 64)
 	if err != nil || radiusKm <= 0 {

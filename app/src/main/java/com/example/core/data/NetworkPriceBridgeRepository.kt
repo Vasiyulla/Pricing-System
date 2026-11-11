@@ -82,14 +82,24 @@ class NetworkPriceBridgeRepository(
     fun getRouteMode(): String = currentRouteMode
 
     fun setCoordinates(lat: Double, lon: Double, neighborhood: String? = null) {
+        val movedSignificantly = kotlin.math.abs(lat - currentLat) > 0.02 ||
+            kotlin.math.abs(lon - currentLon) > 0.02
         currentLat = lat
         currentLon = lon
-        if (neighborhood != null) {
-            currentLocation.update {
-                it.copy(
-                    neighborhood = neighborhood,
-                    addressLine = "Live GPS Active"
-                )
+        currentLocation.update {
+            it.copy(
+                latitude = lat,
+                longitude = lon,
+                neighborhood = neighborhood ?: it.neighborhood,
+                addressLine = if (lat != 0.0 || lon != 0.0) "Live GPS Active" else it.addressLine
+            )
+        }
+        if (movedSignificantly) {
+            scope.launch {
+                try {
+                    database?.cachedDealDao()?.clearDeals()
+                    database?.cachedStoreDao()?.clearAll()
+                } catch (_: Exception) {}
             }
         }
     }
@@ -233,6 +243,11 @@ class NetworkPriceBridgeRepository(
     }.flowOn(Dispatchers.IO)
 
     override fun getBestDeals(categoryId: String?): Flow<List<Product>> = flow {
+        if (currentLat == 0.0 && currentLon == 0.0) {
+            emit(emptyList())
+            return@flow
+        }
+
         // Step 1: Immediately emit from Room SQLite local cache (if any exists from previous sync)
         val cached = try {
             if (categoryId == null || categoryId == "all") {
@@ -507,6 +522,10 @@ class NetworkPriceBridgeRepository(
     // ── Stores ──
 
     override fun getNearbyStores(): Flow<List<Store>> = flow {
+        if (currentLat == 0.0 && currentLon == 0.0) {
+            emit(emptyList())
+            return@flow
+        }
         val result: List<Store> = try {
             val netStores = api.service.getNearbyStores(lat = currentLat, lon = currentLon, radiusKm = 10.0, mode = currentRouteMode)
             val stores = netStores.map { it.toStore() }
@@ -825,21 +844,24 @@ class NetworkPriceBridgeRepository(
 
     private fun recalculateBasketState(basket: ShoppingBasket): ShoppingBasket {
         val total = basket.items.sumOf { (it.bestStorePrice ?: 0.0) * it.quantity }
-        val stores = basket.items.groupBy { it.bestStoreName ?: "Store" }.map { (store, items) ->
-            StoreSplitSummary(
-                storeName = store,
-                itemCount = items.sumOf { it.quantity },
-                subtotal = items.sumOf { (it.bestStorePrice ?: 0.0) * it.quantity }
-            )
-        }
+        val stores = basket.items
+            .filter { it.bestStorePrice > 0.0 && it.bestStoreName.isNotBlank() && it.bestStoreName != "No local store price yet" }
+            .groupBy { it.bestStoreName }
+            .map { (store, items) ->
+                StoreSplitSummary(
+                    storeName = store,
+                    itemCount = items.sumOf { it.quantity },
+                    subtotal = items.sumOf { it.bestStorePrice * it.quantity }
+                )
+            }
         val updated = basket.copy(
             singleStoreEstimatedTotal = total,
-            optimizedEstimatedTotal = total * 0.90,
-            estimatedSavingsAmount = total * 0.10,
+            optimizedEstimatedTotal = total,
+            estimatedSavingsAmount = 0.0,
             storeSplits = stores
         )
         basketSummary.value = SmartBasketSummary(
-            estimatedSavingsAmount = updated.estimatedSavingsAmount,
+            estimatedSavingsAmount = 0.0,
             storesComparedCount = stores.size,
             storeNamesSample = stores.map { it.storeName },
             basketItemCount = updated.items.sumOf { it.quantity },
@@ -887,30 +909,34 @@ class NetworkPriceBridgeRepository(
     }
 
     override suspend fun addShoppingItem(name: String, quantity: Int, packageSize: String) {
-        var bestPrice = 1.50
-        var bestStore = "Nearest Supermarket"
-        var timeAgo = "Just now"
-        var badge = PriceStatusBadgeType.RecentlyObserved
+        var bestPrice = 0.0
+        var bestStore = "No local store price yet"
+        var timeAgo = "Local item"
+        var badge = PriceStatusBadgeType.CommunityReported
 
-        try {
-            val results = withContext(Dispatchers.IO) { api.service.searchProducts(name) }
-            val matched = results.firstOrNull()
-            if (matched != null) {
-                val comps = withContext(Dispatchers.IO) { api.service.compareProductPrices(matched.id, currentLat, currentLon) }
-                val best = comps.minByOrNull { it.effectivePricePence }
-                if (best != null) {
-                    bestPrice = best.effectivePricePence / 100.0
-                    bestStore = best.store.name
-                    timeAgo = best.observedAgo
-                    badge = when (best.freshnessStatus) {
-                        "STORE_CONFIRMED" -> PriceStatusBadgeType.StoreConfirmed
-                        "COMMUNITY_CORROBORATED" -> PriceStatusBadgeType.CommunityCorroborated
-                        "OUTDATED" -> PriceStatusBadgeType.PriceMayBeOutdated
-                        else -> PriceStatusBadgeType.RecentlyObserved
+        if (currentLat != 0.0 || currentLon != 0.0) {
+            try {
+                val results = withContext(Dispatchers.IO) { api.service.searchProducts(name) }
+                val matched = results.firstOrNull()
+                if (matched != null) {
+                    val comps = withContext(Dispatchers.IO) {
+                        api.service.compareProductPrices(matched.id, currentLat, currentLon, currentRouteMode)
+                    }
+                    val best = comps.minByOrNull { it.effectivePricePence }
+                    if (best != null) {
+                        bestPrice = best.effectivePricePence / 100.0
+                        bestStore = best.store.name
+                        timeAgo = best.observedAgo
+                        badge = when (best.freshnessStatus) {
+                            "STORE_CONFIRMED" -> PriceStatusBadgeType.StoreConfirmed
+                            "COMMUNITY_CORROBORATED" -> PriceStatusBadgeType.CommunityCorroborated
+                            "OUTDATED" -> PriceStatusBadgeType.PriceMayBeOutdated
+                            else -> PriceStatusBadgeType.RecentlyObserved
+                        }
                     }
                 }
-            }
-        } catch (_: Exception) {}
+            } catch (_: Exception) {}
+        }
 
         val newItem = ShoppingListItem(
             id = UUID.randomUUID().toString(),

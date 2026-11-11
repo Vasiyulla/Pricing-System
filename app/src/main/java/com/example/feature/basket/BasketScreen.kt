@@ -174,7 +174,7 @@ fun BasketContent(
                         )
                         uiState.basket?.let { basket ->
                             Text(
-                                text = "Optimized across nearby UK stores",
+                                text = "${basket.items.sumOf { it.quantity }} items in your shopping list",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -406,59 +406,14 @@ fun BasketContent(
                             .testTag("basket_item_list"),
                         contentPadding = PaddingValues(
                             top = MaterialTheme.spacing.spaceSm,
-                            bottom = 96.dp
+                            bottom = 148.dp
                         ),
                         verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.spaceMd)
                     ) {
-                        // Estimated Total Hero Summary (Product Rule: Labelled "Estimated total")
+                        // Clean Basket Total Summary Card
                         item(key = "estimated_total_summary") {
                             Box(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
                                 EstimatedTotalSummaryCard(basket = basket)
-                            }
-                        }
-
-                        // Phase 3: 1-Store vs. 2-Store Recommendation Selector Card
-                        item(key = "recommendation_selector") {
-                            Box(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
-                                RecommendationSelectorCard(
-                                    basket = basket,
-                                    selectedIndex = uiState.selectedRecommendationIndex,
-                                    onSelectIndex = { onEvent(BasketUiEvent.OnSelectRecommendation(it)) },
-                                    onNavigateToTwoStopBasket = onNavigateToTwoStopBasket
-                                )
-                            }
-                        }
-
-                        // Store Split Breakdown Segment
-                        if (basket.storeSplits.isNotEmpty()) {
-                            item(key = "store_splits_segment") {
-                                Column(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.section_store_splits),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.padding(bottom = 6.dp)
-                                        )
-                                        TextButton(
-                                            onClick = onNavigateToTwoStopBasket,
-                                            modifier = Modifier.testTag("btn_open_two_stop_optimizer")
-                                        ) {
-                                            Text(
-                                                text = "2-Stop Optimizer →",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
-                                    StoreSplitsRow(splits = basket.storeSplits)
-                                }
                             }
                         }
 
@@ -565,52 +520,34 @@ private fun EstimatedTotalSummaryCard(
                 .padding(MaterialTheme.spacing.spaceMd)
         ) {
             Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        // Strict Product Rule: Labelled "Estimated total"
-                        Text(
-                            text = stringResource(R.string.label_estimated_total),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = stringResource(R.string.price_format, basket.optimizedEstimatedTotal),
-                            style = MaterialTheme.typography.displayLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                MaterialTheme.colorScheme.secondaryContainer,
-                                RoundedCornerShape(8.dp)
-                            )
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.label_savings_optimized, basket.estimatedSavingsAmount),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(MaterialTheme.spacing.spaceSm))
-
+                val totalQty = basket.items.sumOf { it.quantity }
+                val hasMatchedPrices = basket.singleStoreEstimatedTotal > 0.0
                 Text(
-                    text = stringResource(R.string.label_single_store_total, basket.singleStoreEstimatedTotal),
+                    text = "Basket Total ($totalQty ${if (totalQty == 1) "item" else "items"})",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (hasMatchedPrices) {
+                        stringResource(R.string.price_format, basket.singleStoreEstimatedTotal)
+                    } else {
+                        "No local store prices yet"
+                    },
+                    style = if (hasMatchedPrices) MaterialTheme.typography.displayLarge else MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (hasMatchedPrices) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (hasMatchedPrices) {
+                        "Estimated from nearby community price reports"
+                    } else {
+                        "Prices will fill automatically when stores are available nearby"
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textDecoration = TextDecoration.LineThrough
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -890,8 +827,13 @@ private fun ShoppingListItemCard(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = 2.dp)
                     ) {
+                        val unitLabel = if (item.bestStorePrice > 0.0) {
+                            "${item.packageSize} • £%.2f/unit".format(item.bestStorePrice)
+                        } else {
+                            item.packageSize
+                        }
                         Text(
-                            text = "${item.packageSize} • £${item.bestStorePrice.toInt()}/unit",
+                            text = unitLabel,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -930,7 +872,11 @@ private fun ShoppingListItemCard(
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = stringResource(R.string.price_format, item.estimatedItemTotal),
+                        text = if (item.bestStorePrice > 0.0) {
+                            stringResource(R.string.price_format, item.estimatedItemTotal)
+                        } else {
+                            "—"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -1275,7 +1221,7 @@ private fun AddItemBottomSheet(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val quickItems = listOf("Atta", "Basmati Rice", "Toned Milk", "Sugar", "Toor Dal", "Sunflower Oil", "Eggs (6-pack)")
+                    val quickItems = listOf("Whole Milk", "Lurpak Butter", "Warburtons Bread", "Heinz Beans", "Cheddar", "Eggs (6-pack)", "Basmati Rice")
                     quickItems.forEach { item ->
                         AssistChip(
                             onClick = { name = item },

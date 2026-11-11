@@ -32,27 +32,35 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Verified
 import com.example.core.model.SavedAddress
 import com.example.core.session.AppSessionManager
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api 
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -81,6 +89,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -94,6 +103,8 @@ import com.example.core.model.KarmaVerificationPrompt
 import com.example.core.model.LocationInfo
 import com.example.core.model.PriceStatusBadgeType
 import com.example.core.model.Product
+import com.example.core.model.ShoppingBasket
+import com.example.core.model.ShoppingListItem
 import com.example.core.model.SmartBasketSummary
 import com.example.core.model.Store
 import com.example.core.model.StorePrice
@@ -518,7 +529,7 @@ fun HomeContent(
                         }
 
                         // Empty Area Coverage State (no tracked stores within 10 km)
-                        if (!uiState.isLoading && uiState.errorMessage == null && uiState.nearbyStores.isEmpty() && uiState.deals.isEmpty()) {
+                        if (!uiState.isLoading && uiState.errorMessage == null && uiState.nearbyStores.isEmpty()) {
                             item(key = "empty_area_coverage") {
                                 EmptyAreaCoverageCard(
                                     neighborhood = uiState.location.neighborhood,
@@ -543,8 +554,20 @@ fun HomeContent(
                             }
                         }
 
-                        // Section 1 Header: Best Deals Near You
-                        if (uiState.deals.isNotEmpty()) {
+                        // Inline Shopping Basket + Add Item directly on Home
+                        item(key = "home_shopping_basket") {
+                            HomeShoppingBasketCard(
+                                basket = uiState.shoppingBasket,
+                                onAddItemClick = { onEvent(HomeUiEvent.OnOpenAddHomeItem) },
+                                onViewFullBasketClick = { onEvent(HomeUiEvent.OnViewBasketClicked) },
+                                onToggleItemChecked = { onEvent(HomeUiEvent.OnToggleHomeBasketItem(it)) },
+                                onUpdateItemQty = { id, qty -> onEvent(HomeUiEvent.OnUpdateHomeBasketQty(id, qty)) },
+                                onDeleteItem = { onEvent(HomeUiEvent.OnDeleteHomeBasketItem(it)) }
+                            )
+                        }
+
+                        // Section 1 Header: Best Deals Near You (only shown when tracked nearby stores exist)
+                        if (uiState.nearbyStores.isNotEmpty() && uiState.deals.isNotEmpty()) {
                             item(key = "best_deals_header") {
                                 Row(
                                     modifier = Modifier
@@ -673,6 +696,16 @@ fun HomeContent(
             onRetrySubmission = { id -> onEvent(HomeUiEvent.OnRetryQueuedSubmission(id)) },
             onCancelSubmission = { id -> onEvent(HomeUiEvent.OnCancelQueuedSubmission(id)) },
             onDismiss = { onEvent(HomeUiEvent.OnDismissOfflineQueueSheet) }
+        )
+    }
+
+    // Add Item to Shopping Basket Bottom Sheet (directly on Home)
+    if (uiState.isAddItemSheetOpen) {
+        HomeAddItemBottomSheet(
+            onDismiss = { onEvent(HomeUiEvent.OnDismissAddHomeItem) },
+            onConfirmAdd = { name, qty, packSize ->
+                onEvent(HomeUiEvent.OnConfirmAddHomeItem(name, qty, packSize))
+            }
         )
     }
 }
@@ -1398,6 +1431,403 @@ private fun EmptyAreaCoverageCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Pick Different Location")
+            }
+        }
+    }
+}
+
+/**
+ * Inline shopping basket summary & quick item management directly on HomeScreen.
+ */
+@Composable
+private fun HomeShoppingBasketCard(
+    basket: ShoppingBasket?,
+    onAddItemClick: () -> Unit,
+    onViewFullBasketClick: () -> Unit,
+    onToggleItemChecked: (String) -> Unit,
+    onUpdateItemQty: (String, Int) -> Unit,
+    onDeleteItem: (String) -> Unit
+) {
+    val items = basket?.items.orEmpty()
+    val totalUnits = items.sumOf { it.quantity }
+    val estimatedTotal = items.sumOf { it.estimatedItemTotal }
+
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MaterialTheme.spacing.spaceMd)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ShoppingBag,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "My Shopping Basket",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        val subtitle = when {
+                            items.isEmpty() -> "Plan items & compare local prices"
+                            estimatedTotal > 0.0 -> String.format(
+                                java.util.Locale.UK,
+                                "%d %s · Est. £%.2f",
+                                totalUnits,
+                                if (totalUnits == 1) "item" else "items",
+                                estimatedTotal
+                            )
+                            else -> "$totalUnits ${if (totalUnits == 1) "item" else "items"} · No local store prices yet"
+                        }
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = onAddItemClick,
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Add Item", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            if (items.isEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Your basket is empty. Add staples to track prices across nearby stores.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedButton(
+                            onClick = onAddItemClick,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Add First Item", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            } else {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items.forEach { item ->
+                        HomeBasketItemRow(
+                            item = item,
+                            onToggleChecked = { onToggleItemChecked(item.id) },
+                            onUpdateQty = { qty -> onUpdateItemQty(item.id, qty) },
+                            onDelete = { onDeleteItem(item.id) }
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onViewFullBasketClick) {
+                        Text("Open Full Basket", fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeBasketItemRow(
+    item: ShoppingListItem,
+    onToggleChecked: () -> Unit,
+    onUpdateQty: (Int) -> Unit,
+    onDelete: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = item.isChecked,
+                onCheckedChange = { onToggleChecked() }
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.productName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textDecoration = if (item.isChecked) TextDecoration.LineThrough else null,
+                    color = if (item.isChecked) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+                val meta = if (item.bestStorePrice > 0.0) {
+                    String.format(
+                        java.util.Locale.UK,
+                        "%s · %s · £%.2f",
+                        item.packageSize,
+                        item.bestStoreName,
+                        item.estimatedItemTotal
+                    )
+                } else {
+                    "${item.packageSize} · ${item.bestStoreName}"
+                }
+                Text(
+                    text = meta,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { onUpdateQty(item.quantity - 1) },
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Remove,
+                            contentDescription = "Decrease quantity",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Text(
+                        text = item.quantity.toString(),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                    IconButton(
+                        onClick = { onUpdateQty(item.quantity + 1) },
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Increase quantity",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DeleteOutline,
+                    contentDescription = "Remove item",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeAddItemBottomSheet(
+    onDismiss: () -> Unit,
+    onConfirmAdd: (name: String, quantity: Int, packageSize: String) -> Unit
+) {
+    var itemName by remember { mutableStateOf("") }
+    var quantity by remember { mutableStateOf(1) }
+    var packageSize by remember { mutableStateOf("500 g") }
+
+    val quickStaples = listOf(
+        "Whole Milk",
+        "Lurpak Butter",
+        "Warburtons Bread",
+        "Heinz Beans",
+        "Cheddar",
+        "Eggs (6-pack)",
+        "Basmati Rice"
+    )
+    val packSizes = listOf("250 g", "500 g", "1 kg", "1 L", "2.27 L", "Pack", "Each")
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = "Add Item to Basket",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+
+            OutlinedTextField(
+                value = itemName,
+                onValueChange = { itemName = it },
+                label = { Text("Item name") },
+                placeholder = { Text("e.g., Whole Milk, Heinz Beans") },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Text(
+                text = "Quick Staples",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold
+            )
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(quickStaples) { staple ->
+                    SuggestionChip(
+                        onClick = { itemName = staple },
+                        label = { Text(staple) }
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Quantity",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { if (quantity > 1) quantity-- }) {
+                            Icon(Icons.Default.Remove, contentDescription = "Decrease quantity")
+                        }
+                        Text(
+                            text = quantity.toString(),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp)
+                        )
+                        IconButton(onClick = { quantity++ }) {
+                            Icon(Icons.Default.Add, contentDescription = "Increase quantity")
+                        }
+                    }
+                }
+            }
+
+            Text(
+                text = "Pack Size",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold
+            )
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(packSizes) { size ->
+                    FilterChip(
+                        selected = packageSize == size,
+                        onClick = { packageSize = size },
+                        label = { Text(size) }
+                    )
+                }
+            }
+
+            Button(
+                onClick = {
+                    if (itemName.isNotBlank()) {
+                        onConfirmAdd(itemName.trim(), quantity, packageSize)
+                    }
+                },
+                enabled = itemName.isNotBlank(),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Add to Shopping Basket", fontWeight = FontWeight.Bold)
             }
         }
     }

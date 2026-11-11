@@ -10,6 +10,7 @@ import com.example.core.model.Category
 import com.example.core.model.KarmaVerificationPrompt
 import com.example.core.model.LocationInfo
 import com.example.core.model.Product
+import com.example.core.model.ShoppingBasket
 import com.example.core.model.SmartBasketSummary
 import com.example.core.model.Store
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -18,7 +19,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -31,6 +34,7 @@ class HomeViewModel(
     private val isOfflineState = MutableStateFlow(false)
     private val errorMessageState = MutableStateFlow<String?>(null)
     private val isLocationSheetOpenState = MutableStateFlow(false)
+    private val isAddItemSheetOpenState = MutableStateFlow(false)
     private var lastRoutedLat = 0.0
     private var lastRoutedLon = 0.0
 
@@ -119,6 +123,47 @@ class HomeViewModel(
                 errorMessageState.value = null
                 loadData()
             }
+            is HomeUiEvent.OnOpenAddHomeItem -> {
+                isAddItemSheetOpenState.value = true
+                _uiState.update { it.copy(isAddItemSheetOpen = true) }
+            }
+            is HomeUiEvent.OnDismissAddHomeItem -> {
+                isAddItemSheetOpenState.value = false
+                _uiState.update { it.copy(isAddItemSheetOpen = false) }
+            }
+            is HomeUiEvent.OnConfirmAddHomeItem -> {
+                val trimmed = event.name.trim()
+                if (trimmed.isNotEmpty()) {
+                    viewModelScope.launch {
+                        isAddItemSheetOpenState.value = false
+                        _uiState.update { it.copy(isAddItemSheetOpen = false, isUpdatingBasket = true) }
+                        try {
+                            repository.addShoppingItem(trimmed, event.quantity.coerceAtLeast(1), event.packageSize)
+                        } finally {
+                            _uiState.update { it.copy(isUpdatingBasket = false) }
+                        }
+                    }
+                }
+            }
+            is HomeUiEvent.OnToggleHomeBasketItem -> {
+                viewModelScope.launch {
+                    repository.toggleItemChecked(event.itemId)
+                }
+            }
+            is HomeUiEvent.OnUpdateHomeBasketQty -> {
+                viewModelScope.launch {
+                    if (event.newQuantity <= 0) {
+                        repository.deleteShoppingItem(event.itemId)
+                    } else {
+                        repository.updateItemQuantity(event.itemId, event.newQuantity)
+                    }
+                }
+            }
+            is HomeUiEvent.OnDeleteHomeBasketItem -> {
+                viewModelScope.launch {
+                    repository.deleteShoppingItem(event.itemId)
+                }
+            }
             else -> {
                 // Navigation and external click events handled by screen callbacks
             }
@@ -139,20 +184,25 @@ class HomeViewModel(
                 _uiState.update { it.copy(queuedSubmissions = queued) }
             }
         }
+        val locationKeyFlow = repository.getLocation()
+            .map { Pair(it.latitude, it.longitude) }
+            .distinctUntilChanged()
+
         @OptIn(ExperimentalCoroutinesApi::class)
         viewModelScope.launch {
             combine(
                 repository.getLocation(),
                 repository.getSmartBasketSummary(),
                 repository.getCategories(),
-                combine(selectedCategoryId, routeModeState) { cat, _ -> cat }.flatMapLatest { categoryId ->
+                combine(selectedCategoryId, routeModeState, locationKeyFlow) { cat, _, _ -> cat }.flatMapLatest { categoryId ->
                     repository.getBestDeals(categoryId)
                 },
                 repository.getKarmaPrompt(),
-                routeModeState.flatMapLatest {
+                combine(routeModeState, locationKeyFlow) { _, _ -> Unit }.flatMapLatest {
                     repository.getNearbyStores()
                 },
-                repository.getNotifications()
+                repository.getNotifications(),
+                repository.getShoppingBasket()
             ) { flows ->
                 val location = flows[0] as LocationInfo
                 val basket = flows[1] as SmartBasketSummary
@@ -165,6 +215,8 @@ class HomeViewModel(
                 val stores = flows[5] as List<Store>
                 @Suppress("UNCHECKED_CAST")
                 val notifs = flows[6] as List<AppNotification>
+                val shoppingBasket = flows[7] as ShoppingBasket
+                val visibleDeals = if (stores.isEmpty()) emptyList() else deals
 
                 HomeUiState(
                     isLoading = false,
@@ -174,7 +226,7 @@ class HomeViewModel(
                     basketSummary = basket,
                     categories = categories,
                     selectedCategoryId = selectedCategoryId.value,
-                    deals = deals,
+                    deals = visibleDeals,
                     nearbyStores = stores,
                     karmaPrompt = karma,
                     isLocationSheetOpen = isLocationSheetOpenState.value,
@@ -184,7 +236,10 @@ class HomeViewModel(
                     isSyncingOffline = _uiState.value.isSyncingOffline,
                     notifications = notifs,
                     isNotificationsSheetOpen = _uiState.value.isNotificationsSheetOpen,
-                    routeMode = routeModeState.value
+                    routeMode = routeModeState.value,
+                    shoppingBasket = shoppingBasket,
+                    isAddItemSheetOpen = isAddItemSheetOpenState.value,
+                    isUpdatingBasket = _uiState.value.isUpdatingBasket
                 )
             }.catch { exception ->
                 _uiState.update {

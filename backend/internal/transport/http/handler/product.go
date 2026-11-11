@@ -138,11 +138,11 @@ func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // GetBestDealsBatch eliminates the previous N+1 query loop using a single lateral/DISTINCT ON SQL query.
 func (h *ProductHandler) GetBestDealsBatch(w http.ResponseWriter, r *http.Request) {
 	category := r.URL.Query().Get("category")
-	lat, _ := strconv.ParseFloat(r.URL.Query().Get("lat"), 64)
-	lon, _ := strconv.ParseFloat(r.URL.Query().Get("lon"), 64)
-	if lat == 0 && lon == 0 {
-		lat = 51.5390
-		lon = -0.1426
+	lat, latErr := strconv.ParseFloat(r.URL.Query().Get("lat"), 64)
+	lon, lonErr := strconv.ParseFloat(r.URL.Query().Get("lon"), 64)
+	if latErr != nil || lonErr != nil || (lat == 0 && lon == 0) {
+		respond.JSON(w, http.StatusOK, []domain.ProductDealSummary{})
+		return
 	}
 
 	mode := service.NormalizeRouteMode(r.URL.Query().Get("mode"))

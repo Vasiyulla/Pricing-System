@@ -6,6 +6,7 @@ import com.example.core.model.Category
 import com.example.core.model.KarmaVerificationPrompt
 import com.example.core.model.LocationInfo
 import com.example.core.model.Product
+import com.example.core.model.ShoppingBasket
 import com.example.core.model.SmartBasketSummary
 import com.example.core.model.Store
 import com.example.core.ui.BottomBarDestination
@@ -37,7 +38,10 @@ data class HomeUiState(
     val isNotificationsSheetOpen: Boolean = false,
     val activeProximityStore: Store? = null,
     val proximityDistanceMeters: Float? = null,
-    val routeMode: String = "walking"
+    val routeMode: String = "walking",
+    val shoppingBasket: ShoppingBasket? = null,
+    val isAddItemSheetOpen: Boolean = false,
+    val isUpdatingBasket: Boolean = false
 ) {
     val unreadNotificationsCount: Int get() = notifications.count { !it.isRead }
     val isEmpty: Boolean get() = !isLoading && errorMessage == null && deals.isEmpty()
@@ -69,4 +73,14 @@ sealed interface HomeUiEvent {
     data class OnCancelQueuedSubmission(val submissionId: String) : HomeUiEvent
     data object OnDismissProximityAlert : HomeUiEvent
     data class OnRouteModeChanged(val mode: String) : HomeUiEvent
+    data object OnOpenAddHomeItem : HomeUiEvent
+    data object OnDismissAddHomeItem : HomeUiEvent
+    data class OnConfirmAddHomeItem(
+        val name: String,
+        val quantity: Int,
+        val packageSize: String
+    ) : HomeUiEvent
+    data class OnToggleHomeBasketItem(val itemId: String) : HomeUiEvent
+    data class OnUpdateHomeBasketQty(val itemId: String, val newQuantity: Int) : HomeUiEvent
+    data class OnDeleteHomeBasketItem(val itemId: String) : HomeUiEvent
 }
