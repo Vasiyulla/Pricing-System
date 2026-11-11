@@ -28,7 +28,9 @@ data class NetworkProduct(
     val category: String,
     @Json(name = "package_size") val packageSize: String,
     @Json(name = "unit_metric") val unitMetric: String,
-    @Json(name = "target_mrp_gbp") val targetMrpGbp: Double
+    @Json(name = "target_mrp_gbp") val targetMrpGbp: Double,
+    @Json(name = "created_by_user_id") val createdByUserId: String? = null,
+    @Json(name = "created_at") val createdAt: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -229,7 +231,8 @@ data class NetworkUserProfileStats(
     val role: String = "ActiveContributor",
     @Json(name = "karma_points") val karmaPoints: Int = 50,
     @Json(name = "prices_reported") val pricesReported: Int = 0,
-    @Json(name = "prices_verified") val pricesVerified: Int = 0
+    @Json(name = "prices_verified") val pricesVerified: Int = 0,
+    @Json(name = "products_added") val productsAdded: Int = 0
 )
 
 @JsonClass(generateAdapter = true)

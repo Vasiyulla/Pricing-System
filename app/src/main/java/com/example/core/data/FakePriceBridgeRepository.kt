@@ -689,10 +689,15 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
         }
     }
 
+    private val myAddedProductsState = MutableStateFlow<List<Product>>(emptyList())
+
     override suspend fun addProduct(product: Product): String {
         allProducts.value = allProducts.value + product
+        myAddedProductsState.value = listOf(product) + myAddedProductsState.value.filter { it.id != product.id }
         return product.id
     }
+
+    override fun getMyAddedProducts(): Flow<List<Product>> = myAddedProductsState.asStateFlow()
 
     override suspend fun confirmPriceFreshness(productId: String, storeId: String) {
         allProducts.value = allProducts.value.map { product ->

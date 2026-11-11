@@ -18,6 +18,7 @@ data class UserProfile(
     val karmaPoints: Int,
     val pricesReported: Int,
     val pricesVerified: Int,
+    val productsAdded: Int = 0,
     val accuracyPercent: Int,
     val memberSince: String,
     val reputationLevel: String, // e.g. "Trusted Contributor", "Price Explorer"

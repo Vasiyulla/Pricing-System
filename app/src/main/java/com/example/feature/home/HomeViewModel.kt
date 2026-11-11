@@ -202,7 +202,8 @@ class HomeViewModel(
                     repository.getNearbyStores()
                 },
                 repository.getNotifications(),
-                repository.getShoppingBasket()
+                repository.getShoppingBasket(),
+                repository.getMyAddedProducts()
             ) { flows ->
                 val location = flows[0] as LocationInfo
                 val basket = flows[1] as SmartBasketSummary
@@ -216,6 +217,8 @@ class HomeViewModel(
                 @Suppress("UNCHECKED_CAST")
                 val notifs = flows[6] as List<AppNotification>
                 val shoppingBasket = flows[7] as ShoppingBasket
+                @Suppress("UNCHECKED_CAST")
+                val myAddedProducts = flows[8] as List<Product>
                 val visibleDeals = if (stores.isEmpty()) emptyList() else deals
 
                 HomeUiState(
@@ -238,6 +241,7 @@ class HomeViewModel(
                     isNotificationsSheetOpen = _uiState.value.isNotificationsSheetOpen,
                     routeMode = routeModeState.value,
                     shoppingBasket = shoppingBasket,
+                    myAddedProducts = myAddedProducts,
                     isAddItemSheetOpen = isAddItemSheetOpenState.value,
                     isUpdatingBasket = _uiState.value.isUpdatingBasket
                 )

@@ -106,12 +106,13 @@ object AppSessionManager {
         )
     }
 
-    fun updateStats(karmaPoints: Int, pricesReported: Int, pricesVerified: Int) {
+    fun updateStats(karmaPoints: Int, pricesReported: Int, pricesVerified: Int, productsAdded: Int = _userProfile.value.productsAdded) {
         prefs?.edit()?.putInt(KEY_KARMA_POINTS, karmaPoints)?.apply()
         _userProfile.value = _userProfile.value.copy(
             karmaPoints = karmaPoints,
             pricesReported = pricesReported,
-            pricesVerified = pricesVerified
+            pricesVerified = pricesVerified,
+            productsAdded = productsAdded
         )
     }
 

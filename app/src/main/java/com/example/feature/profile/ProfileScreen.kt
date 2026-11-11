@@ -24,11 +24,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.MilitaryTech
@@ -69,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
 import com.example.core.model.PriceSubmission
+import com.example.core.model.Product
 import com.example.core.model.UserProfile
 import com.example.core.model.UserRole
 import com.example.core.ui.BottomBarDestination
@@ -92,6 +96,8 @@ fun ProfileScreen(
     modifier: Modifier = Modifier,
     onNavigateToAuth: () -> Unit = {},
     onNavigateToBounties: () -> Unit = {},
+    onNavigateToAddProduct: () -> Unit = {},
+    onNavigateToProductDetail: (String) -> Unit = {},
     viewModel: ProfileViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -100,6 +106,8 @@ fun ProfileScreen(
         uiState = uiState,
         onNavigateToAuth = onNavigateToAuth,
         onNavigateToBounties = onNavigateToBounties,
+        onNavigateToAddProduct = onNavigateToAddProduct,
+        onNavigateToProductDetail = onNavigateToProductDetail,
         onEvent = { event ->
             when (event) {
                 is ProfileUiEvent.OnBottomNavClicked -> {
@@ -127,7 +135,9 @@ fun ProfileContent(
     onEvent: (ProfileUiEvent) -> Unit,
     modifier: Modifier = Modifier,
     onNavigateToAuth: () -> Unit = {},
-    onNavigateToBounties: () -> Unit = {}
+    onNavigateToBounties: () -> Unit = {},
+    onNavigateToAddProduct: () -> Unit = {},
+    onNavigateToProductDetail: (String) -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -174,7 +184,10 @@ fun ProfileContent(
 
                     // Stats Row
                     item(key = "stats_row") {
-                        StatsRow(profile = uiState.profile)
+                        StatsRow(
+                            profile = uiState.profile,
+                            myAddedProductsCount = uiState.myAddedProducts.size
+                        )
                     }
 
                     // Contributor & Privacy Actions
@@ -195,6 +208,90 @@ fun ProfileContent(
                                 }
                             }
                         )
+                    }
+
+                    // Products Added by You (till now cumulative count + full list)
+                    item(key = "my_added_products_header") {
+                        val totalAdded = maxOf(uiState.profile.productsAdded, uiState.myAddedProducts.size)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = MaterialTheme.spacing.spaceMd),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Products Added by You ($totalAdded)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Added by your account on Price Bridge so far",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = onNavigateToAddProduct) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Add Product", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    if (uiState.myAddedProducts.isEmpty()) {
+                        item(key = "my_added_products_empty") {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = MaterialTheme.spacing.spaceMd)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Text(
+                                        text = "You haven't added any products yet. Products you create or report prices on will appear here.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    OutlinedButton(
+                                        onClick = onNavigateToAddProduct,
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Add,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Add Your First Product", fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        items(
+                            items = uiState.myAddedProducts,
+                            key = { "my_prod_${it.id}" }
+                        ) { product ->
+                            UserAddedProductCard(
+                                product = product,
+                                onClick = { onNavigateToProductDetail(product.id) }
+                            )
+                        }
                     }
 
                     // Recent Submissions Header
@@ -431,14 +528,22 @@ private fun ProfileHeaderCard(
 @Composable
 private fun StatsRow(
     profile: UserProfile,
+    myAddedProductsCount: Int,
     modifier: Modifier = Modifier
 ) {
+    val totalAdded = maxOf(profile.productsAdded, myAddedProductsCount)
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = MaterialTheme.spacing.spaceMd),
         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.spaceSm)
     ) {
+        StatCard(
+            value = "$totalAdded",
+            label = "Products Added",
+            icon = Icons.Default.Inventory2,
+            modifier = Modifier.weight(1f)
+        )
         StatCard(
             value = "${profile.pricesReported}",
             label = stringResource(R.string.profile_stat_reported),
@@ -451,12 +556,102 @@ private fun StatsRow(
             icon = Icons.Default.Visibility,
             modifier = Modifier.weight(1f)
         )
-        StatCard(
-            value = "${profile.accuracyPercent}%",
-            label = stringResource(R.string.profile_stat_accuracy),
-            icon = Icons.Default.Verified,
-            modifier = Modifier.weight(1f)
-        )
+    }
+}
+
+@Composable
+private fun UserAddedProductCard(
+    product: Product,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MaterialTheme.spacing.spaceMd)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Inventory2,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = product.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val details = listOfNotNull(
+                    product.categoryId.takeIf { it.isNotBlank() },
+                    product.quantityDescription.takeIf { it.isNotBlank() }
+                ).joinToString(" · ")
+                if (details.isNotBlank()) {
+                    Text(
+                        text = details,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (!product.barcode.isNullOrBlank()) {
+                    Text(
+                        text = "Barcode: ${product.barcode}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                val mrp = product.bestStorePrice.mrp
+                if (mrp > 0.0) {
+                    Text(
+                        text = String.format(java.util.Locale.UK, "£%.2f", mrp),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Text(
+                        text = "Added by you",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Open product",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
     }
 }
 
@@ -578,14 +773,14 @@ private fun SubmissionHistoryCard(
             // Price
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "${submission.currencySymbol}${String.format("%.0f", submission.price)}",
+                    text = "${submission.currencySymbol}${String.format(java.util.Locale.UK, "%.2f", submission.price)}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 if (submission.mrp > submission.price) {
                     Text(
-                        text = "${submission.currencySymbol}${String.format("%.0f", submission.mrp)}",
+                        text = "${submission.currencySymbol}${String.format(java.util.Locale.UK, "%.2f", submission.mrp)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textDecoration = TextDecoration.LineThrough

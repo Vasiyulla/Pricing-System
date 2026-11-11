@@ -79,7 +79,7 @@ func NewRouter(
 
 		// Products & Barcodes
 		r.Route("/products", func(r chi.Router) {
-			r.With(middleware.RequireAuth(sessionStore)).Post("/", h.Product.Create)
+			r.With(middleware.RequireAuth(sessionStore), rateLimiter.Middleware("product_create", 20, time.Minute)).Post("/", h.Product.Create)
 			r.Get("/deals", h.Product.GetBestDealsBatch)
 			r.Get("/search", h.Product.Search)
 			r.Get("/barcode/{ean}", h.Product.GetByBarcode)
@@ -101,6 +101,7 @@ func NewRouter(
 			r.Use(middleware.RequireAuth(sessionStore))
 			r.Get("/profile", h.User.GetProfile)
 			r.Get("/submissions", h.User.GetSubmissions)
+			r.Get("/products", h.User.GetProducts)
 		})
 
 		// Price Submissions & Freshness
@@ -147,4 +148,3 @@ func NewRouter(
 
 	return r
 }
-

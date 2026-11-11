@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log"
@@ -339,31 +340,39 @@ type pgProductRepo struct {
 
 func (r *pgProductRepo) GetByID(ctx context.Context, id string) (*domain.Product, error) {
 	var p domain.Product
+	var createdAt time.Time
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, name, brand, barcode, category, package_size, unit_metric, target_mrp_gbp
+		SELECT id, name, brand, COALESCE(barcode, ''), category, package_size, unit_metric,
+		       target_mrp_gbp::float8, COALESCE(created_by_user_id, ''), created_at
 		FROM products WHERE id = $1
-	`, id).Scan(&p.ID, &p.Name, &p.Brand, &p.Barcode, &p.Category, &p.PackageSize, &p.UnitMetric, &p.TargetMRP)
+	`, id).Scan(&p.ID, &p.Name, &p.Brand, &p.Barcode, &p.Category, &p.PackageSize, &p.UnitMetric,
+		&p.TargetMRP, &p.CreatedByUserID, &createdAt)
 	if err != nil {
 		return nil, err
 	}
+	p.CreatedAt = &createdAt
 	return &p, nil
 }
 
 func (r *pgProductRepo) GetByBarcode(ctx context.Context, ean string) (*domain.Product, error) {
 	var p domain.Product
+	var createdAt time.Time
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, name, brand, barcode, category, package_size, unit_metric, target_mrp_gbp
+		SELECT id, name, brand, COALESCE(barcode, ''), category, package_size, unit_metric,
+		       target_mrp_gbp::float8, COALESCE(created_by_user_id, ''), created_at
 		FROM products WHERE barcode = $1
-	`, ean).Scan(&p.ID, &p.Name, &p.Brand, &p.Barcode, &p.Category, &p.PackageSize, &p.UnitMetric, &p.TargetMRP)
+	`, ean).Scan(&p.ID, &p.Name, &p.Brand, &p.Barcode, &p.Category, &p.PackageSize, &p.UnitMetric,
+		&p.TargetMRP, &p.CreatedByUserID, &createdAt)
 	if err != nil {
 		return nil, err
 	}
+	p.CreatedAt = &createdAt
 	return &p, nil
 }
 
 func (r *pgProductRepo) Search(ctx context.Context, query string, category string) ([]domain.Product, error) {
 	var sb strings.Builder
-	sb.WriteString("SELECT id, name, brand, barcode, category, package_size, unit_metric, target_mrp_gbp FROM products WHERE 1=1")
+	sb.WriteString(`SELECT id, name, brand, COALESCE(barcode, ''), category, package_size, unit_metric, target_mrp_gbp::float8, COALESCE(created_by_user_id, ''), created_at FROM products WHERE 1=1`)
 	var args []interface{}
 	idx := 1
 
@@ -387,10 +396,13 @@ func (r *pgProductRepo) Search(ctx context.Context, query string, category strin
 	}
 	defer rows.Close()
 
-	var products []domain.Product
+	products := make([]domain.Product, 0)
 	for rows.Next() {
 		var p domain.Product
-		if err := rows.Scan(&p.ID, &p.Name, &p.Brand, &p.Barcode, &p.Category, &p.PackageSize, &p.UnitMetric, &p.TargetMRP); err == nil {
+		var createdAt time.Time
+		if err := rows.Scan(&p.ID, &p.Name, &p.Brand, &p.Barcode, &p.Category, &p.PackageSize,
+			&p.UnitMetric, &p.TargetMRP, &p.CreatedByUserID, &createdAt); err == nil {
+			p.CreatedAt = &createdAt
 			products = append(products, p)
 		}
 	}
@@ -401,20 +413,95 @@ func (r *pgProductRepo) GetAll(ctx context.Context) ([]domain.Product, error) {
 	return r.Search(ctx, "", "")
 }
 
+func (r *pgProductRepo) GetByCreator(ctx context.Context, userID string, limit, offset int) ([]domain.Product, error) {
+	if userID == "" {
+		return []domain.Product{}, nil
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT p.id, p.name, p.brand, COALESCE(p.barcode, ''), p.category, p.package_size, p.unit_metric,
+		       p.target_mrp_gbp::float8, COALESCE(p.created_by_user_id, ''), p.created_at
+		FROM products p
+		WHERE p.created_by_user_id = $1
+		   OR EXISTS (
+		       SELECT 1 FROM price_records pr
+		       WHERE pr.product_id = p.id AND pr.submitted_by_user_id = $1
+		   )
+		ORDER BY p.created_at DESC
+		LIMIT $2 OFFSET $3;
+	`, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	products := make([]domain.Product, 0)
+	for rows.Next() {
+		var p domain.Product
+		var createdAt time.Time
+		if err := rows.Scan(&p.ID, &p.Name, &p.Brand, &p.Barcode, &p.Category, &p.PackageSize,
+			&p.UnitMetric, &p.TargetMRP, &p.CreatedByUserID, &createdAt); err == nil {
+			p.CreatedAt = &createdAt
+			products = append(products, p)
+		}
+	}
+	return products, nil
+}
+
 func (r *pgProductRepo) Create(ctx context.Context, p domain.Product) error {
-	_, err := r.pool.Exec(ctx, `
-		INSERT INTO products (id, name, brand, barcode, category, package_size, unit_metric, target_mrp_gbp)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if p.IdempotencyKey != "" {
+		var existingID string
+		if err := tx.QueryRow(ctx, `SELECT id FROM products WHERE idempotency_key = $1 LIMIT 1`, p.IdempotencyKey).Scan(&existingID); err == nil && existingID != "" {
+			return tx.Commit(ctx)
+		}
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO products (
+			id, name, brand, barcode, category, package_size, unit_metric,
+			target_mrp_gbp, created_by_user_id, idempotency_key
+		)
+		VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, NULLIF($9, ''), NULLIF($10, ''))
 		ON CONFLICT (id) DO UPDATE SET
 			name = EXCLUDED.name,
 			brand = EXCLUDED.brand,
-			barcode = EXCLUDED.barcode,
+			barcode = COALESCE(EXCLUDED.barcode, products.barcode),
 			category = EXCLUDED.category,
 			package_size = EXCLUDED.package_size,
 			unit_metric = EXCLUDED.unit_metric,
-			target_mrp_gbp = EXCLUDED.target_mrp_gbp;
-	`, p.ID, p.Name, p.Brand, p.Barcode, p.Category, p.PackageSize, p.UnitMetric, p.TargetMRP)
-	return err
+			target_mrp_gbp = EXCLUDED.target_mrp_gbp,
+			created_by_user_id = COALESCE(NULLIF(products.created_by_user_id, ''), EXCLUDED.created_by_user_id),
+			idempotency_key = COALESCE(NULLIF(products.idempotency_key, ''), EXCLUDED.idempotency_key);
+	`, p.ID, p.Name, p.Brand, p.Barcode, p.Category, p.PackageSize, p.UnitMetric,
+		p.TargetMRP, p.CreatedByUserID, p.IdempotencyKey)
+	if err != nil {
+		return err
+	}
+
+	if payloadBytes, marshalErr := json.Marshal(map[string]any{
+		"product_id":         p.ID,
+		"name":               p.Name,
+		"created_by_user_id": p.CreatedByUserID,
+	}); marshalErr == nil {
+		_, _ = tx.Exec(ctx, `
+			INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload)
+			VALUES ('product.created', 'Product', $1, $2::jsonb)
+		`, p.ID, string(payloadBytes))
+	}
+
+	return tx.Commit(ctx)
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1025,6 +1112,12 @@ func (r *pgSessionRepo) GetUserProfile(ctx context.Context, userID string) (*dom
 		&out.KarmaPoints, &out.PricesReported, &out.PricesVerified, &out.AuthMode); err != nil {
 		return nil, err
 	}
+	_ = r.pool.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT p.id)
+		FROM products p
+		WHERE p.created_by_user_id = $1
+		   OR EXISTS (SELECT 1 FROM price_records pr WHERE pr.product_id = p.id AND pr.submitted_by_user_id = $1);
+	`, userID).Scan(&out.ProductsAdded)
 	return &out, nil
 }
 

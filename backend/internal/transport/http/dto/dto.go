@@ -18,14 +18,15 @@ type GoogleAuthRequest struct {
 }
 
 type CreateProductRequest struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Brand       string  `json:"brand"`
-	Barcode     string  `json:"barcode"`
-	Category    string  `json:"category"`
-	PackageSize string  `json:"package_size"`
-	UnitMetric  string  `json:"unit_metric"`
-	TargetMRP   float64 `json:"target_mrp_gbp"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Brand          string  `json:"brand"`
+	Barcode        string  `json:"barcode"`
+	Category       string  `json:"category"`
+	PackageSize    string  `json:"package_size"`
+	UnitMetric     string  `json:"unit_metric"`
+	TargetMRP      float64 `json:"target_mrp_gbp"`
+	IdempotencyKey string  `json:"idempotency_key,omitempty"`
 }
 
 type PriceSubmissionRequest struct {

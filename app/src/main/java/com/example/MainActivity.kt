@@ -324,6 +324,12 @@ fun PriceBridgeNavHost(
 
                     navController.navigate(Routes.COPILOT)
 
+                },
+
+                onNavigateToAddProduct = {
+
+                    navController.navigate(Routes.addProduct())
+
                 }
 
             )
@@ -507,6 +513,18 @@ fun PriceBridgeNavHost(
                 onNavigateToBounties = {
 
                     navController.navigate(Routes.BOUNTIES)
+
+                },
+
+                onNavigateToAddProduct = {
+
+                    navController.navigate(Routes.addProduct())
+
+                },
+
+                onNavigateToProductDetail = { productId ->
+
+                    navController.navigate(Routes.productDetail(productId))
 
                 }
 

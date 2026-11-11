@@ -88,6 +88,7 @@ interface PriceBridgeRepository {
     // ── Profile & Auth ──
     fun getUserProfile(): Flow<UserProfile>
     fun getSubmissionHistory(): Flow<List<PriceSubmission>>
+    fun getMyAddedProducts(): Flow<List<Product>>
     fun isUserLoggedIn(): Flow<Boolean>
     suspend fun loginWithGoogle(
         idToken: String? = null,

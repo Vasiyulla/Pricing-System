@@ -31,10 +31,10 @@ data class CopilotUiState(
     val inputText: String = "",
     val isGenerating: Boolean = false,
     val suggestedPrompts: List<String> = listOf(
-        "🥛 Compare milk prices nearby",
-        "🛒 Where is cooking oil cheapest?",
-        "🍞 Compare bread & eggs near me",
-        "⚡ 2-Store Pareto basket savings"
+        "Show my added products",
+        "Summarize my basket",
+        "Compare milk prices nearby",
+        "Where is cooking oil cheapest?"
     )
 )
 

@@ -17,6 +17,7 @@ type ProductRepository interface {
 	GetByBarcode(ctx context.Context, ean string) (*domain.Product, error)
 	Search(ctx context.Context, query string, category string) ([]domain.Product, error)
 	GetAll(ctx context.Context) ([]domain.Product, error)
+	GetByCreator(ctx context.Context, userID string, limit, offset int) ([]domain.Product, error)
 	Create(ctx context.Context, product domain.Product) error
 }
 

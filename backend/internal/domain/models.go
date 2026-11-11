@@ -123,14 +123,17 @@ type StoreDiscrepancyReport struct {
 
 // Product represents a catalog SKU
 type Product struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Brand       string  `json:"brand"`
-	Barcode     string  `json:"barcode"` // EAN-13
-	Category    string  `json:"category"`
-	PackageSize string  `json:"package_size"`
-	UnitMetric  string  `json:"unit_metric"` // e.g. "100g", "kg", "100ml", "L", "wash"
-	TargetMRP   float64 `json:"target_mrp_gbp"`
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	Brand           string     `json:"brand"`
+	Barcode         string     `json:"barcode"` // EAN-13
+	Category        string     `json:"category"`
+	PackageSize     string     `json:"package_size"`
+	UnitMetric      string     `json:"unit_metric"` // e.g. "100g", "kg", "100ml", "L", "wash"
+	TargetMRP       float64    `json:"target_mrp_gbp"`
+	CreatedByUserID string     `json:"created_by_user_id,omitempty"`
+	IdempotencyKey  string     `json:"idempotency_key,omitempty"`
+	CreatedAt       *time.Time `json:"created_at,omitempty"`
 }
 
 // PriceRecord represents an append-only observed price at a store
@@ -312,6 +315,7 @@ type UserProfileRecord struct {
 	KarmaPoints    int    `json:"karma_points"`
 	PricesReported int    `json:"prices_reported"`
 	PricesVerified int    `json:"prices_verified"`
+	ProductsAdded  int    `json:"products_added"`
 	AuthMode       string `json:"auth_mode"`
 }
 

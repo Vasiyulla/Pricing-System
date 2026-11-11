@@ -141,11 +141,13 @@ class ProfileViewModel(
             combine(
                 repository.getUserProfile(),
                 repository.getSubmissionHistory(),
-                repository.getAvailableProfiles()
-            ) { profile, submissions, available ->
+                repository.getAvailableProfiles(),
+                repository.getMyAddedProducts()
+            ) { profile, submissions, available, addedProducts ->
                 _uiState.value.copy(
                     isLoading = false,
                     profile = profile,
+                    myAddedProducts = addedProducts,
                     recentSubmissions = submissions,
                     availableProfiles = available
                 )

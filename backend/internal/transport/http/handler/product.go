@@ -12,8 +12,9 @@ import (
 	"pricebridge/backend/internal/domain"
 	"pricebridge/backend/internal/repository"
 	"pricebridge/backend/internal/service"
-	"pricebridge/backend/internal/transport/http/respond"
 	"pricebridge/backend/internal/transport/http/dto"
+	"pricebridge/backend/internal/transport/http/middleware"
+	"pricebridge/backend/internal/transport/http/respond"
 )
 
 type ProductHandler struct {
@@ -24,6 +25,7 @@ type ProductHandler struct {
 	trolleySvc   *service.TrolleyService
 	storeHandler *StoreHandler
 	routeSvc     *service.RouteService
+	productSvc   *service.ProductService
 }
 
 func NewProductHandler(
@@ -33,11 +35,12 @@ func NewProductHandler(
 	compareSvc *service.CompareService,
 	trolleySvc *service.TrolleyService,
 	storeHandler *StoreHandler,
-	routeSvc ...*service.RouteService,
+	routeSvc *service.RouteService,
+	productSvc ...*service.ProductService,
 ) *ProductHandler {
-	var rs *service.RouteService
-	if len(routeSvc) > 0 {
-		rs = routeSvc[0]
+	var ps *service.ProductService
+	if len(productSvc) > 0 {
+		ps = productSvc[0]
 	}
 	return &ProductHandler{
 		productRepo:  productRepo,
@@ -46,7 +49,8 @@ func NewProductHandler(
 		compareSvc:   compareSvc,
 		trolleySvc:   trolleySvc,
 		storeHandler: storeHandler,
-		routeSvc:     rs,
+		routeSvc:     routeSvc,
+		productSvc:   ps,
 	}
 }
 
@@ -62,6 +66,16 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 			respond.JSON(w, http.StatusOK, existing)
 			return
 		}
+	}
+
+	var createdBy string
+	if sess, ok := r.Context().Value(middleware.UserContextKey).(middleware.SessionData); ok {
+		createdBy = sess.UserID
+	}
+
+	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
+	if idempotencyKey == "" {
+		idempotencyKey = strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 	}
 
 	prodID := strings.TrimSpace(req.ID)
@@ -86,17 +100,25 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	product := domain.Product{
-		ID:          prodID,
-		Name:        strings.TrimSpace(req.Name),
-		Brand:       brand,
-		Barcode:     strings.TrimSpace(req.Barcode),
-		Category:    category,
-		PackageSize: pkgSize,
-		UnitMetric:  unit,
-		TargetMRP:   req.TargetMRP,
+		ID:              prodID,
+		Name:            strings.TrimSpace(req.Name),
+		Brand:           brand,
+		Barcode:         strings.TrimSpace(req.Barcode),
+		Category:        category,
+		PackageSize:     pkgSize,
+		UnitMetric:      unit,
+		TargetMRP:       req.TargetMRP,
+		CreatedByUserID: createdBy,
+		IdempotencyKey:  idempotencyKey,
 	}
 
-	if err := h.productRepo.Create(r.Context(), product); err != nil {
+	var err error
+	if h.productSvc != nil {
+		err = h.productSvc.CreateProduct(r.Context(), product)
+	} else {
+		err = h.productRepo.Create(r.Context(), product)
+	}
+	if err != nil {
 		respond.Error(w, r, http.StatusInternalServerError, "Failed to create product: "+err.Error())
 		return
 	}
@@ -107,10 +129,21 @@ func (h *ProductHandler) Search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	category := r.URL.Query().Get("category")
 
-	prods, err := h.productRepo.Search(r.Context(), q, category)
+	var (
+		prods []domain.Product
+		err   error
+	)
+	if h.productSvc != nil {
+		prods, err = h.productSvc.SearchProducts(r.Context(), q, category)
+	} else {
+		prods, err = h.productRepo.Search(r.Context(), q, category)
+	}
 	if err != nil {
 		respond.Error(w, r, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if prods == nil {
+		prods = []domain.Product{}
 	}
 	respond.JSON(w, http.StatusOK, prods)
 }

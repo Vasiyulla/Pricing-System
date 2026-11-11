@@ -128,7 +128,8 @@ interface PriceBridgeApiService {
 
     @POST("api/v1/products")
     suspend fun createProduct(
-        @Body payload: Map<String, @JvmSuppressWildcards Any>
+        @Body payload: Map<String, @JvmSuppressWildcards Any>,
+        @retrofit2.http.Header("Idempotency-Key") idempotencyKey: String? = null
     ): NetworkProduct
 
     @POST("api/v1/prices/confirm-freshness")
@@ -152,5 +153,11 @@ interface PriceBridgeApiService {
 
     @GET("api/v1/users/me/submissions")
     suspend fun getMySubmissions(): List<NetworkPriceRecordItem>
+
+    @GET("api/v1/users/me/products")
+    suspend fun getMyProducts(
+        @Query("limit") limit: Int = 50,
+        @Query("offset") offset: Int = 0
+    ): List<NetworkProduct>
 }
 

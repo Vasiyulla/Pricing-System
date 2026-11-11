@@ -142,13 +142,14 @@ func RunAPI() {
 	routeSvc := service.NewRouteService(cfg.RoutingProvider, cfg.OSRMBaseURL, cfg.GoogleMapsAPIKey, rdb)
 	compareSvc := service.NewCompareService(repos.store, repos.price, rdb)
 	compareSvc.SetRouteService(routeSvc)
+	productSvc := service.NewProductService(repos.product, rdb, logger, metrics)
 	optimizerSvc := service.NewOptimizerService(repos.store, repos.price, routeSvc)
 	trolleySvc := service.NewTrolleyService(repos.store, repos.product, repos.price)
 	aiSvc := service.NewAIService()
 	storeVerifier := service.NewStoreVerifier(repos.store, repos.discrepancy)
 	objectStore := storage.NewObjectStore(cfg.S3Endpoint, cfg.S3Bucket, cfg.LocalUploadDir)
 
-	outboxWorker := service.NewOutboxWorker(repos.outbox, repos.session, compareSvc, logger, metrics)
+	outboxWorker := service.NewOutboxWorker(repos.outbox, repos.session, compareSvc, logger, metrics, productSvc)
 	outboxWorker.Start(rootCtx)
 
 	var bgWG sync.WaitGroup
@@ -166,11 +167,11 @@ func RunAPI() {
 			Health:   handler.NewHealthHandler(repos.pgPing, rdb, metrics),
 			Auth:     handler.NewAuthHandler(client.NewNeonAuthClient(cfg.NeonAuthURL), client.NewGoogleOAuthClient(), repos.session, sessionStore),
 			Store:    storeHandler,
-			Product:  handler.NewProductHandler(repos.product, repos.price, repos.store, compareSvc, trolleySvc, storeHandler, routeSvc),
-			Price:    handler.NewPriceHandler(repos.price, repos.product, repos.session, compareSvc),
+			Product:  handler.NewProductHandler(repos.product, repos.price, repos.store, compareSvc, trolleySvc, storeHandler, routeSvc, productSvc),
+			Price:    handler.NewPriceHandler(repos.price, repos.product, repos.session, compareSvc, productSvc),
 			Basket:   handler.NewBasketHandler(optimizerSvc),
 			Bounty:   handler.NewBountyHandler(repos.bounty, repos.category, repos.sticker),
-			User:     handler.NewUserHandler(repos.session, repos.price),
+			User:     handler.NewUserHandler(repos.session, repos.price, repos.product, productSvc),
 			Evidence: handler.NewEvidenceHandler(repos.evidence, objectStore),
 			AI:       handler.NewAIHandler(aiSvc),
 			Admin:    handler.NewAdminHandler(repos.store, compareSvc, storeHandler, logger),
@@ -233,7 +234,8 @@ func RunWorker() {
 	}
 
 	compareSvc := service.NewCompareService(repos.store, repos.price, rdb)
-	worker := service.NewOutboxWorker(repos.outbox, repos.session, compareSvc, logger, metrics)
+	productSvc := service.NewProductService(repos.product, rdb, logger, metrics)
+	worker := service.NewOutboxWorker(repos.outbox, repos.session, compareSvc, logger, metrics, productSvc)
 	worker.Start(rootCtx)
 
 	<-rootCtx.Done()

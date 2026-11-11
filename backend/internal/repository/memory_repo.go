@@ -154,16 +154,65 @@ func (r *memoryProductRepo) Search(ctx context.Context, query string, category s
 func (r *memoryProductRepo) GetAll(ctx context.Context) ([]domain.Product, error) {
 	r.ms.mu.RLock()
 	defer r.ms.mu.RUnlock()
-	var result []domain.Product
+	result := make([]domain.Product, 0, len(r.ms.products))
 	for _, p := range r.ms.products {
 		result = append(result, p)
 	}
 	return result, nil
 }
 
+func (r *memoryProductRepo) GetByCreator(ctx context.Context, userID string, limit, offset int) ([]domain.Product, error) {
+	r.ms.mu.RLock()
+	defer r.ms.mu.RUnlock()
+
+	if userID == "" {
+		return []domain.Product{}, nil
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	result := make([]domain.Product, 0)
+	for _, p := range r.ms.products {
+		matched := p.CreatedByUserID == userID
+		if !matched {
+			for _, rec := range r.ms.prices[p.ID] {
+				if rec.SubmittedByUserID == userID {
+					matched = true
+					break
+				}
+			}
+		}
+		if matched {
+			result = append(result, p)
+		}
+	}
+
+	if offset >= len(result) {
+		return []domain.Product{}, nil
+	}
+	end := offset + limit
+	if end > len(result) {
+		end = len(result)
+	}
+	return result[offset:end], nil
+}
+
 func (r *memoryProductRepo) Create(ctx context.Context, product domain.Product) error {
 	r.ms.mu.Lock()
 	defer r.ms.mu.Unlock()
+
+	if product.IdempotencyKey != "" {
+		for _, existing := range r.ms.products {
+			if existing.IdempotencyKey == product.IdempotencyKey {
+				return nil
+			}
+		}
+	}
+
 	r.ms.products[product.ID] = product
 	if product.Barcode != "" {
 		r.ms.barcodeIndex[product.Barcode] = product.ID

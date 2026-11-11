@@ -2,6 +2,7 @@ package com.example.feature.profile
 
 import com.example.core.data.local.entity.QueuedSubmissionEntity
 import com.example.core.model.PriceSubmission
+import com.example.core.model.Product
 import com.example.core.model.UserProfile
 import com.example.core.ui.BottomBarDestination
 
@@ -9,6 +10,7 @@ data class ProfileUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val profile: UserProfile? = null,
+    val myAddedProducts: List<Product> = emptyList(),
     val recentSubmissions: List<PriceSubmission> = emptyList(),
     val availableProfiles: List<UserProfile> = emptyList(),
     val isProfileSwitcherOpen: Boolean = false,

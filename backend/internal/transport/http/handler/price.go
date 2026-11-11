@@ -21,6 +21,7 @@ type PriceHandler struct {
 	productRepo repository.ProductRepository
 	sessionRepo repository.SessionRepository
 	compareSvc  *service.CompareService
+	productSvc  *service.ProductService
 }
 
 func NewPriceHandler(
@@ -28,12 +29,18 @@ func NewPriceHandler(
 	productRepo repository.ProductRepository,
 	sessionRepo repository.SessionRepository,
 	compareSvc *service.CompareService,
+	productSvc ...*service.ProductService,
 ) *PriceHandler {
+	var ps *service.ProductService
+	if len(productSvc) > 0 {
+		ps = productSvc[0]
+	}
 	return &PriceHandler{
 		priceRepo:   priceRepo,
 		productRepo: productRepo,
 		sessionRepo: sessionRepo,
 		compareSvc:  compareSvc,
+		productSvc:  ps,
 	}
 }
 
@@ -102,6 +109,9 @@ func (h *PriceHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if h.compareSvc != nil {
 		_ = h.compareSvc.InvalidateProductCache(r.Context(), record.ProductID, record.StoreID)
 	}
+	if h.productSvc != nil && submittedBy != "" {
+		h.productSvc.InvalidateUserProductsCache(r.Context(), submittedBy)
+	}
 
 	respond.JSON(w, http.StatusCreated, map[string]any{
 		"status":  "submitted",
@@ -165,6 +175,9 @@ func (h *PriceHandler) BatchSync(w http.ResponseWriter, r *http.Request) {
 
 	if h.sessionRepo != nil && submittedBy != "" && synced > 0 {
 		_ = h.sessionRepo.IncrementUserStats(r.Context(), submittedBy, synced*15, synced, 0)
+	}
+	if h.productSvc != nil && submittedBy != "" && synced > 0 {
+		h.productSvc.InvalidateUserProductsCache(r.Context(), submittedBy)
 	}
 
 	respond.JSON(w, http.StatusOK, map[string]any{

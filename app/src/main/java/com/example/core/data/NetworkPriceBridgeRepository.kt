@@ -160,6 +160,7 @@ class NetworkPriceBridgeRepository(
     private val pendingOfflineCount = MutableStateFlow(0)
     private val queuedSubmissionsState = MutableStateFlow<List<QueuedSubmissionEntity>>(emptyList())
     private val submissionHistory = MutableStateFlow<List<PriceSubmission>>(emptyList())
+    private val myAddedProductsState = MutableStateFlow<List<Product>>(emptyList())
     private val isLoggedInState = MutableStateFlow(false)
 
     private val dismissedPromptId = MutableStateFlow<String?>(null)
@@ -479,6 +480,7 @@ class NetworkPriceBridgeRepository(
     }.flowOn(Dispatchers.IO)
 
     override suspend fun addProduct(product: Product): String {
+        val idempotencyKey = "prod_${product.id}"
         val payload = mapOf(
             "id" to product.id,
             "name" to product.name,
@@ -487,13 +489,39 @@ class NetworkPriceBridgeRepository(
             "category" to product.categoryId,
             "package_size" to product.quantityDescription,
             "unit_metric" to "unit",
-            "target_mrp_gbp" to (product.bestStorePrice?.mrp ?: product.bestStorePrice?.price ?: 0.0)
+            "target_mrp_gbp" to (product.bestStorePrice?.mrp ?: product.bestStorePrice?.price ?: 0.0),
+            "idempotency_key" to idempotencyKey
         )
-        val created = withContext(Dispatchers.IO) { api.service.createProduct(payload) }
-        val persistedProduct = created.toProduct()
+        val created = withContext(Dispatchers.IO) {
+            api.service.createProduct(payload, idempotencyKey)
+        }
+        val persistedProduct = created.toProduct(
+            bestPrice = StorePrice(
+                storeId = "user_added",
+                storeName = "Added by you",
+                distanceFormatted = "--",
+                price = created.targetMrpGbp,
+                mrp = created.targetMrpGbp,
+                lastObservedRelativeTime = "Just added",
+                sourceDescription = "Added by you",
+                statusBadge = PriceStatusBadgeType.CommunityReported,
+                isLowestPrice = true
+            ),
+            comparedCount = 0
+        )
         try {
             database?.cachedProductDao()?.insertProduct(CachedProductEntity.fromProduct(persistedProduct))
         } catch (_: Exception) {}
+        myAddedProductsState.update { current ->
+            listOf(persistedProduct) + current.filter { it.id != persistedProduct.id }
+        }
+        val currentProfile = AppSessionManager.userProfile.value
+        AppSessionManager.updateStats(
+            karmaPoints = currentProfile.karmaPoints,
+            pricesReported = currentProfile.pricesReported,
+            pricesVerified = currentProfile.pricesVerified,
+            productsAdded = maxOf(currentProfile.productsAdded, myAddedProductsState.value.size)
+        )
         return created.id
     }
 
@@ -657,12 +685,19 @@ class NetworkPriceBridgeRepository(
         )
         api.service.submitPrice(payload, idempotencyKey)
 
+        val resolvedProductName = try {
+            database?.cachedProductDao()?.getProductById(productId)?.name
+        } catch (_: Exception) { null } ?: productId
+        val resolvedStoreName = try {
+            database?.cachedStoreDao()?.getStoreById(storeId)?.name
+        } catch (_: Exception) { null } ?: storeId
+
         submissionHistory.update { history ->
             listOf(
                 PriceSubmission(
                     id = UUID.randomUUID().toString(),
-                    productName = productId,
-                    storeName = storeId,
+                    productName = resolvedProductName,
+                    storeName = resolvedStoreName,
                     price = price,
                     mrp = mrp,
                     currencySymbol = "£",
@@ -671,6 +706,14 @@ class NetworkPriceBridgeRepository(
                     statusBadge = PriceStatusBadgeType.RecentlyObserved
                 )
             ) + history
+        }
+
+        if (AppSessionManager.isLoggedIn.value && AppSessionManager.getAuthToken().isNotBlank()) {
+            try {
+                val remote = withContext(Dispatchers.IO) { api.service.getMyProducts() }
+                val mapped = remote.map { it.toUserAddedProduct() }
+                myAddedProductsState.value = mapped
+            } catch (_: Exception) {}
         }
     }
 
@@ -1008,7 +1051,8 @@ class NetworkPriceBridgeRepository(
                 AppSessionManager.updateStats(
                     karmaPoints = stats.karmaPoints,
                     pricesReported = stats.pricesReported,
-                    pricesVerified = stats.pricesVerified
+                    pricesVerified = stats.pricesVerified,
+                    productsAdded = stats.productsAdded
                 )
             } catch (_: Exception) {}
         }
@@ -1042,6 +1086,25 @@ class NetworkPriceBridgeRepository(
             } catch (_: Exception) {}
         }
         submissionHistory.collect { emit(it) }
+    }.flowOn(Dispatchers.IO)
+
+    override fun getMyAddedProducts(): Flow<List<Product>> = flow {
+        emit(myAddedProductsState.value)
+        if (AppSessionManager.isLoggedIn.value && AppSessionManager.getAuthToken().isNotBlank()) {
+            try {
+                val remote = withContext(Dispatchers.IO) { api.service.getMyProducts() }
+                val remoteMapped = remote.map { it.toUserAddedProduct() }
+                val remoteIds = remoteMapped.map { it.id }.toSet()
+                val merged = remoteMapped + myAddedProductsState.value.filter { it.id !in remoteIds }
+                myAddedProductsState.value = merged
+                try {
+                    database?.cachedProductDao()?.insertProducts(
+                        remoteMapped.map { CachedProductEntity.fromProduct(it) }
+                    )
+                } catch (_: Exception) {}
+            } catch (_: Exception) {}
+        }
+        myAddedProductsState.collect { emit(it) }
     }.flowOn(Dispatchers.IO)
 
     override fun isUserLoggedIn(): Flow<Boolean> = AppSessionManager.isLoggedIn
@@ -1114,6 +1177,8 @@ class NetworkPriceBridgeRepository(
             com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
         } catch (_: Exception) {}
         AppSessionManager.logout()
+        myAddedProductsState.value = emptyList()
+        submissionHistory.value = emptyList()
     }
 
     override fun getAvailableProfiles(): Flow<List<UserProfile>> = flow {
@@ -1190,6 +1255,7 @@ class NetworkPriceBridgeRepository(
                 // 3. Clear in-memory flows
                 recentSearches.value = emptyList()
                 submissionHistory.value = emptyList()
+                myAddedProductsState.value = emptyList()
                 pendingOfflineCount.value = 0
                 queuedSubmissionsState.value = emptyList()
 
@@ -1337,21 +1403,36 @@ class NetworkPriceBridgeRepository(
         )
     }
 
+    private fun NetworkProduct.toUserAddedProduct(): Product = this.toProduct(
+        bestPrice = StorePrice(
+            storeId = "user_added",
+            storeName = "Added by you",
+            distanceFormatted = "--",
+            price = this.targetMrpGbp,
+            mrp = this.targetMrpGbp,
+            lastObservedRelativeTime = "Added by you",
+            sourceDescription = "Catalog contribution",
+            statusBadge = PriceStatusBadgeType.CommunityReported,
+            isLowestPrice = true
+        ),
+        comparedCount = 0
+    )
+
     private fun NetworkProduct.toProduct(
         bestPrice: StorePrice? = null,
         comparedCount: Int = 1,
         alternatives: List<StorePrice> = emptyList()
     ): Product {
         val defaultPrice = bestPrice ?: StorePrice(
-            storeId = "unknown",
-            storeName = "Nearby Supermarket",
-            distanceFormatted = "1.0 km",
+            storeId = "catalog",
+            storeName = "Catalog entry",
+            distanceFormatted = "--",
             price = this.targetMrpGbp,
             mrp = this.targetMrpGbp,
             currencySymbol = "£",
-            lastObservedRelativeTime = "Recently observed",
-            sourceDescription = "Community observed",
-            statusBadge = PriceStatusBadgeType.RecentlyObserved
+            lastObservedRelativeTime = "Catalog reference",
+            sourceDescription = "Catalog reference",
+            statusBadge = PriceStatusBadgeType.CommunityReported
         )
         return Product(
             id = this.id,

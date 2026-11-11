@@ -40,6 +40,7 @@ data class HomeUiState(
     val proximityDistanceMeters: Float? = null,
     val routeMode: String = "walking",
     val shoppingBasket: ShoppingBasket? = null,
+    val myAddedProducts: List<Product> = emptyList(),
     val isAddItemSheetOpen: Boolean = false,
     val isUpdatingBasket: Boolean = false
 ) {

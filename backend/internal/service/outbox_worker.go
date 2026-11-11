@@ -17,6 +17,7 @@ type OutboxWorker struct {
 	outboxRepo  repository.OutboxRepository
 	sessionRepo repository.SessionRepository
 	compareSvc  *CompareService
+	productSvc  *ProductService
 	logger      *slog.Logger
 	metrics     *telemetry.Metrics
 	wg          sync.WaitGroup
@@ -28,11 +29,17 @@ func NewOutboxWorker(
 	compareSvc *CompareService,
 	logger *slog.Logger,
 	metrics *telemetry.Metrics,
+	productSvc ...*ProductService,
 ) *OutboxWorker {
+	var ps *ProductService
+	if len(productSvc) > 0 {
+		ps = productSvc[0]
+	}
 	return &OutboxWorker{
 		outboxRepo:  outboxRepo,
 		sessionRepo: sessionRepo,
 		compareSvc:  compareSvc,
+		productSvc:  ps,
 		logger:      logger,
 		metrics:     metrics,
 	}
@@ -93,6 +100,13 @@ func (w *OutboxWorker) processBatch(ctx context.Context) {
 			if json.Unmarshal([]byte(ev.PayloadJSON), &payload) == nil && payload.ProductID != "" {
 				_ = w.compareSvc.InvalidateProductCache(ctx, payload.ProductID, payload.StoreID)
 			}
+		} else if ev.EventType == "product.created" && w.productSvc != nil {
+			var payload struct {
+				CreatedByUserID string `json:"created_by_user_id"`
+			}
+			_ = json.Unmarshal([]byte(ev.PayloadJSON), &payload)
+			w.productSvc.InvalidateUserProductsCache(ctx, payload.CreatedByUserID)
+			w.productSvc.InvalidateSearchCache(ctx)
 		}
 
 		if err := w.outboxRepo.MarkProcessed(ctx, ev.ID); err != nil {
