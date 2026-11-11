@@ -67,32 +67,44 @@ fun TwoStopBasketScreen(
         .collectAsState(initial = null)
 
     var optimizedResult by remember { mutableStateOf<NetworkTwoStopBasketResult?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var emptyReason by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(basket?.items) {
         withContext(Dispatchers.IO) {
+            isLoading = true
             try {
                 val loc = repository.getLocation().firstOrNull()
-                val lat = loc?.latitude?.takeIf { it != 0.0 } ?: 51.5390
-                val lon = loc?.longitude?.takeIf { it != 0.0 } ?: -0.1426
-
+                val lat = loc?.latitude ?: 0.0
+                val lon = loc?.longitude ?: 0.0
                 val basketItems = basket?.items.orEmpty()
-                val reqItems = if (basketItems.isNotEmpty()) {
-                    basketItems.map { item ->
-                        val matchedProd = repository.searchProducts(item.productName, null).firstOrNull()?.firstOrNull()
+
+                if (basketItems.isEmpty()) {
+                    optimizedResult = null
+                    emptyReason = "Your shopping basket is empty. Add items on Home first to compare nearby store totals."
+                    return@withContext
+                }
+                if (lat == 0.0 && lon == 0.0) {
+                    optimizedResult = null
+                    emptyReason = "Waiting for GPS or a selected area with tracked nearby stores."
+                    return@withContext
+                }
+
+                val reqItems = basketItems.mapNotNull { item ->
+                    val matchedProd = repository.searchProducts(item.productName, null).firstOrNull()?.firstOrNull()
+                    matchedProd?.let {
                         NetworkBasketItem(
-                            productId = matchedProd?.id ?: item.id,
+                            productId = it.id,
                             productName = item.productName,
                             quantity = item.quantity
                         )
                     }
-                } else {
-                    // Use top catalog staples if user's basket is currently empty
-                    repository.getAllProducts().firstOrNull().orEmpty().take(4).map {
-                        NetworkBasketItem(productId = it.id, productName = it.name, quantity = 1)
-                    }
                 }
 
-                if (reqItems.isNotEmpty()) {
+                if (reqItems.isEmpty()) {
+                    optimizedResult = null
+                    emptyReason = "None of your basket items match tracked store price records near this location yet."
+                } else {
                     optimizedResult = ApiClient.service.optimizeBasket(
                         NetworkBasketOptimizeRequest(
                             items = reqItems,
@@ -100,32 +112,38 @@ fun TwoStopBasketScreen(
                             userLon = lon
                         )
                     )
+                    emptyReason = if (optimizedResult == null) {
+                        "Not enough nearby tracked store coverage to calculate a multi-store split here yet."
+                    } else null
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                optimizedResult = null
+                emptyReason = "Unable to compute nearby store comparison at your current location."
+            } finally {
+                isLoading = false
+            }
         }
     }
 
-    val singleStoreTotal = optimizedResult?.let { it.singleStoreBestPence / 100.0 }
-        ?: basket?.singleStoreEstimatedTotal?.takeIf { it > 0.0 } ?: 0.0
-    val optimizedTotal = optimizedResult?.let { it.combinedTotalPence / 100.0 }
-        ?: basket?.optimizedEstimatedTotal?.takeIf { it > 0.0 } ?: 0.0
-    val rawSavings = optimizedResult?.let { it.netSavingsPence / 100.0 }
-        ?: (singleStoreTotal - optimizedTotal).coerceAtLeast(0.0)
-    val extraWalkMeters = optimizedResult?.walkingDistanceMeters ?: 0
-    val extraWalkMins = (optimizedResult?.estimatedExtraMinutes ?: 1).coerceAtLeast(1)
-    val hourlySavingsRate = if (extraWalkMins > 0) (rawSavings / (extraWalkMins / 60.0)) else 0.0
+    val result = optimizedResult
+    val singleStoreTotal = result?.let { it.singleStoreBestPence / 100.0 } ?: 0.0
+    val optimizedTotal = result?.let { it.combinedTotalPence / 100.0 } ?: 0.0
+    val rawSavings = result?.let { it.netSavingsPence / 100.0 } ?: 0.0
+    val extraWalkMeters = result?.walkingDistanceMeters ?: 0
+    val extraWalkMins = (result?.estimatedExtraMinutes ?: 1).coerceAtLeast(1)
+    val hourlySavingsRate = if (extraWalkMins > 0 && rawSavings > 0.0) (rawSavings / (extraWalkMins / 60.0)) else 0.0
 
-    val store1Name = optimizedResult?.store1?.name ?: "Primary Store"
-    val store1Total = optimizedResult?.let { it.store1TotalPence / 100.0 } ?: (optimizedTotal * 0.55)
-    val store1ItemsCount = optimizedResult?.store1Items?.size ?: 0
-    val store2Name = optimizedResult?.store2?.name ?: "Secondary Store"
-    val store2Total = optimizedResult?.let { it.store2TotalPence / 100.0 } ?: (optimizedTotal * 0.45)
-    val store2ItemsCount = optimizedResult?.store2Items?.size ?: 0
+    val store1Name = result?.store1?.name ?: "Store 1"
+    val store1Total = result?.let { it.store1TotalPence / 100.0 } ?: 0.0
+    val store1ItemsCount = result?.store1Items?.size ?: 0
+    val store2Name = result?.store2?.name ?: "Store 2"
+    val store2Total = result?.let { it.store2TotalPence / 100.0 } ?: 0.0
+    val store2ItemsCount = result?.store2Items?.size ?: 0
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("2-Stop Pareto Basket Optimizer", fontWeight = FontWeight.Bold) },
+                title = { Text("2-Stop Store Comparison", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -134,6 +152,37 @@ fun TwoStopBasketScreen(
             )
         }
     ) { innerPadding ->
+        if (result == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ShoppingBag,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Text(
+                        text = if (isLoading) "Checking nearby stores…" else "No store comparison available here",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = emptyReason ?: "Add basket items in an area with tracked stores to compare store totals.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -333,6 +382,7 @@ fun TwoStopBasketScreen(
                     }
                 }
             }
+        }
         }
     }
 }

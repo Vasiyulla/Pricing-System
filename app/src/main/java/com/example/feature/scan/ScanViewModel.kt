@@ -169,7 +169,7 @@ class ScanViewModel @JvmOverloads constructor(
 
         viewModelScope.launch {
             var resolvedProductId: String? = null
-            var resolvedStoreId = "store_tesco_camden"
+            var resolvedStoreId: String? = null
             try {
                 // 1. Resolve or create a real Product ID in PostgreSQL
                 val existingProduct = repository.searchProducts(productName, null).firstOrNull()?.firstOrNull()
@@ -186,7 +186,7 @@ class ScanViewModel @JvmOverloads constructor(
                             packageSizeBadge = state.unitInput.ifBlank { "1 unit" }.take(8),
                             imageUrl = "",
                             bestStorePrice = StorePrice(
-                                storeId = resolvedStoreId,
+                                storeId = "catalog",
                                 storeName = storeName,
                                 distanceFormatted = "--",
                                 price = price,
@@ -196,21 +196,29 @@ class ScanViewModel @JvmOverloads constructor(
                                 statusBadge = PriceStatusBadgeType.RecentlyObserved,
                                 isLowestPrice = true
                             ),
-                            storesComparedCount = 1,
+                            storesComparedCount = 0,
                             alternativePrices = emptyList()
                         )
                     )
                 }
 
-                // 2. Resolve real Store ID from nearby stores
+                // 2. Resolve real Store ID from nearby tracked stores (never default to a hardcoded store)
                 val nearbyStores = repository.getNearbyStores().firstOrNull() ?: emptyList()
                 val matchedStore = nearbyStores.find {
                     it.name.contains(storeName, ignoreCase = true) ||
                         storeName.contains(it.name, ignoreCase = true)
                 } ?: nearbyStores.firstOrNull()
-                if (matchedStore != null) {
-                    resolvedStoreId = matchedStore.id
+
+                if (matchedStore == null) {
+                    _uiState.update {
+                        it.copy(
+                            isSubmittingPrice = false,
+                            errorMessage = "Saved '$productName' to your catalog, but no tracked store matches '$storeName' near your current location yet."
+                        )
+                    }
+                    return@launch
                 }
+                resolvedStoreId = matchedStore.id
 
                 // 3. Upload EXIF-stripped photo evidence if real file exists
                 val photoUri = state.capturedPhotoUri
@@ -239,14 +247,24 @@ class ScanViewModel @JvmOverloads constructor(
                     evidenceId = evidenceId
                 )
             } catch (_: Exception) {
-                // Offline fallback: enqueue into Room WorkManager sync queue
-                repository.enqueueOfflinePrice(
-                    productId = resolvedProductId ?: productName.lowercase().replace(" ", "_").take(30),
-                    storeId = resolvedStoreId,
-                    price = price,
-                    mrp = price * 1.15,
-                    sourceType = state.evidenceType
-                )
+                val safeStoreId = resolvedStoreId
+                if (safeStoreId != null) {
+                    repository.enqueueOfflinePrice(
+                        productId = resolvedProductId ?: productName.lowercase().replace(" ", "_").take(30),
+                        storeId = safeStoreId,
+                        price = price,
+                        mrp = price * 1.15,
+                        sourceType = state.evidenceType
+                    )
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isSubmittingPrice = false,
+                            errorMessage = "Could not verify a tracked store near your location for offline queuing."
+                        )
+                    }
+                    return@launch
+                }
             }
 
             _uiState.update {

@@ -309,12 +309,28 @@ fun SubmitPriceContent(
             )
             Spacer(modifier = Modifier.height(MaterialTheme.spacing.spaceSm))
 
-            uiState.nearbyStores.forEach { store ->
-                StoreSelectionRow(
-                    store = store,
-                    isSelected = uiState.selectedStore?.id == store.id,
-                    onSelect = { onEvent(SubmitPriceUiEvent.OnStoreSelected(store)) }
-                )
+            if (uiState.nearbyStores.isEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "No tracked stores found near your current location yet. Select a different location on Home to submit a store price.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(14.dp)
+                    )
+                }
+            } else {
+                uiState.nearbyStores.forEach { store ->
+                    StoreSelectionRow(
+                        store = store,
+                        isSelected = uiState.selectedStore?.id == store.id,
+                        onSelect = { onEvent(SubmitPriceUiEvent.OnStoreSelected(store)) }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(MaterialTheme.spacing.spaceLg))

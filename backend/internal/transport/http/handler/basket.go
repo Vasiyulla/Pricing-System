@@ -25,8 +25,8 @@ func (h *BasketHandler) Optimize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.UserLat == 0 && req.UserLon == 0 {
-		req.UserLat = 51.5390
-		req.UserLon = -0.1426
+		respond.Error(w, r, http.StatusBadRequest, "Valid user coordinates (user_lat, user_lon) are required")
+		return
 	}
 
 	result, err := h.optimizerSvc.OptimizeTwoStopBasket(r.Context(), req.Items, req.UserLat, req.UserLon)

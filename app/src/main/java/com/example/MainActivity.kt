@@ -324,12 +324,6 @@ fun PriceBridgeNavHost(
 
                     navController.navigate(Routes.COPILOT)
 
-                },
-
-                onNavigateToAddProduct = {
-
-                    navController.navigate(Routes.addProduct())
-
                 }
 
             )
@@ -706,7 +700,7 @@ fun PriceBridgeNavHost(
 
                 onProductCreated = { newProductId ->
 
-                    navController.navigate(Routes.submitPrice(newProductId)) {
+                    navController.navigate(Routes.productDetail(newProductId)) {
 
                         popUpTo(Routes.ADD_PRODUCT) { inclusive = true }
 
@@ -795,7 +789,10 @@ fun PriceBridgeNavHost(
 
         composable(Routes.YELLOW_STICKERS) {
 
-            YellowStickerScreen(onNavigateBack = { navController.popBackStack() })
+            YellowStickerScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToScan = { navController.navigate(Routes.SCAN) }
+            )
 
         }
 

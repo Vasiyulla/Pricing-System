@@ -44,7 +44,12 @@ object ApiClient {
         if (token.isNotBlank()) {
             requestBuilder.header("Authorization", "Bearer $token")
         }
-        chain.proceed(requestBuilder.build())
+        val response = chain.proceed(requestBuilder.build())
+        val path = original.url.encodedPath
+        if (response.code == 401 && token.isNotBlank() && !path.contains("/auth/") && !path.contains("/admin/")) {
+            com.example.core.session.AppSessionManager.logout()
+        }
+        response
     }
 
     private val okHttpClient: OkHttpClient = OkHttpClient.Builder()

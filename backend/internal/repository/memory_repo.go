@@ -264,6 +264,28 @@ func (r *memoryPriceRepo) GetLatestPrice(ctx context.Context, productID, storeID
 	return nil, fmt.Errorf("no active price for product %s at store %s", productID, storeID)
 }
 
+func (r *memoryPriceRepo) GetLatestPricesForProductsAndStores(ctx context.Context, productIDs, storeIDs []string) ([]domain.PriceRecord, error) {
+	r.ms.mu.RLock()
+	defer r.ms.mu.RUnlock()
+
+	if len(productIDs) == 0 || len(storeIDs) == 0 {
+		return []domain.PriceRecord{}, nil
+	}
+	storeSet := make(map[string]bool, len(storeIDs))
+	for _, s := range storeIDs {
+		storeSet[s] = true
+	}
+	result := make([]domain.PriceRecord, 0)
+	for _, pid := range productIDs {
+		for _, rec := range r.ms.prices[pid] {
+			if rec.SupersededBy == nil && storeSet[rec.StoreID] {
+				result = append(result, rec)
+			}
+		}
+	}
+	return result, nil
+}
+
 func (r *memoryPriceRepo) SubmitPrice(ctx context.Context, record domain.PriceRecord) error {
 	r.ms.mu.Lock()
 	defer r.ms.mu.Unlock()

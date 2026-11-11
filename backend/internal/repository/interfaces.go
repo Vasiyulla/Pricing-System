@@ -24,6 +24,7 @@ type ProductRepository interface {
 type PriceRepository interface {
 	GetStorePrices(ctx context.Context, productID string) ([]domain.PriceRecord, error)
 	GetLatestPrice(ctx context.Context, productID, storeID string) (*domain.PriceRecord, error)
+	GetLatestPricesForProductsAndStores(ctx context.Context, productIDs, storeIDs []string) ([]domain.PriceRecord, error)
 	SubmitPrice(ctx context.Context, record domain.PriceRecord) error
 	ConfirmFreshness(ctx context.Context, productID, storeID, userID string) (int, error)
 	GetAllPrices(ctx context.Context) ([]domain.PriceRecord, error)

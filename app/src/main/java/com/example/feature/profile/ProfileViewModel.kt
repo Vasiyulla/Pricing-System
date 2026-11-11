@@ -16,7 +16,18 @@ class ProfileViewModel(
     private val repository: PriceBridgeRepository = PriceBridgeRepositoryProvider.repository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ProfileUiState(isLoading = true))
+    private val initialSettings = com.example.core.session.AppSessionManager.getSettings()
+    private val _uiState = MutableStateFlow(
+        ProfileUiState(
+            isLoading = true,
+            notifyPriceDrops = initialSettings.notifyPriceDrops,
+            notifyFreshnessAlerts = initialSettings.notifyFreshnessAlerts,
+            notifyCommunityPoints = initialSettings.notifyCommunityPoints,
+            autoSyncOnWifi = initialSettings.autoSyncOnWifi,
+            compressReceiptImages = initialSettings.compressReceiptImages,
+            preferredRadiusKm = initialSettings.preferredRadiusKm
+        )
+    )
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
     init {
@@ -69,21 +80,27 @@ class ProfileViewModel(
                 _uiState.update { it.copy(isSettingsSheetOpen = false) }
             }
             is ProfileUiEvent.OnTogglePriceDropNotifs -> {
+                com.example.core.session.AppSessionManager.saveSettings { it.copy(notifyPriceDrops = event.enabled) }
                 _uiState.update { it.copy(notifyPriceDrops = event.enabled) }
             }
             is ProfileUiEvent.OnToggleFreshnessNotifs -> {
+                com.example.core.session.AppSessionManager.saveSettings { it.copy(notifyFreshnessAlerts = event.enabled) }
                 _uiState.update { it.copy(notifyFreshnessAlerts = event.enabled) }
             }
             is ProfileUiEvent.OnTogglePointsNotifs -> {
+                com.example.core.session.AppSessionManager.saveSettings { it.copy(notifyCommunityPoints = event.enabled) }
                 _uiState.update { it.copy(notifyCommunityPoints = event.enabled) }
             }
             is ProfileUiEvent.OnToggleAutoSyncWifi -> {
+                com.example.core.session.AppSessionManager.saveSettings { it.copy(autoSyncOnWifi = event.enabled) }
                 _uiState.update { it.copy(autoSyncOnWifi = event.enabled) }
             }
             is ProfileUiEvent.OnToggleCompressImages -> {
+                com.example.core.session.AppSessionManager.saveSettings { it.copy(compressReceiptImages = event.enabled) }
                 _uiState.update { it.copy(compressReceiptImages = event.enabled) }
             }
             is ProfileUiEvent.OnSelectPreferredRadius -> {
+                com.example.core.session.AppSessionManager.saveSettings { it.copy(preferredRadiusKm = event.radiusKm) }
                 _uiState.update { it.copy(preferredRadiusKm = event.radiusKm) }
             }
             is ProfileUiEvent.OnClearLocalCache -> {
@@ -97,11 +114,11 @@ class ProfileViewModel(
             is ProfileUiEvent.OnResetAllData -> {
                 viewModelScope.launch {
                     _uiState.update { it.copy(isResettingData = true, resetSuccessMessage = null) }
-                    val success = repository.clearAllData(wipeServerDb = true)
+                    val success = repository.clearAllData(wipeServerDb = false)
                     _uiState.update {
                         it.copy(
                             isResettingData = false,
-                            resetSuccessMessage = if (success) "App reset & database wiped cleanly! Restarting session..." else "Failed to reset server database."
+                            resetSuccessMessage = if (success) "Local cache cleared and session signed out cleanly." else "Failed to clear local app data."
                         )
                     }
                     kotlinx.coroutines.delay(2500)

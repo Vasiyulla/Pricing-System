@@ -547,6 +547,42 @@ func (r *pgPriceRepo) GetStorePrices(ctx context.Context, productID string) ([]d
 	return records, nil
 }
 
+func (r *pgPriceRepo) GetLatestPricesForProductsAndStores(ctx context.Context, productIDs, storeIDs []string) ([]domain.PriceRecord, error) {
+	if len(productIDs) == 0 || len(storeIDs) == 0 {
+		return []domain.PriceRecord{}, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT ON (pr.product_id, pr.store_id)
+		       pr.id::text, pr.product_id, pr.store_id, s.name,
+		       pr.regular_price_pence, pr.loyalty_price_pence, pr.loyalty_scheme,
+		       pr.freshness_status, pr.source_type, pr.observed_at
+		FROM price_records pr
+		JOIN stores s ON pr.store_id = s.id
+		WHERE pr.product_id = ANY($1)
+		  AND pr.store_id = ANY($2)
+		  AND pr.superseded_by IS NULL
+		ORDER BY pr.product_id, pr.store_id, pr.observed_at DESC;
+	`, productIDs, storeIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	records := make([]domain.PriceRecord, 0)
+	for rows.Next() {
+		var pr domain.PriceRecord
+		var loyaltyScheme, freshness string
+		if err := rows.Scan(&pr.ID, &pr.ProductID, &pr.StoreID, &pr.StoreName,
+			&pr.RegularPricePence, &pr.LoyaltyPricePence, &loyaltyScheme,
+			&freshness, &pr.SourceType, &pr.ObservedAt); err == nil {
+			pr.LoyaltyScheme = domain.LoyaltyScheme(loyaltyScheme)
+			pr.FreshnessStatus = domain.FreshnessStatus(freshness)
+			records = append(records, pr)
+		}
+	}
+	return records, nil
+}
+
 func (r *pgPriceRepo) GetLatestPrice(ctx context.Context, productID, storeID string) (*domain.PriceRecord, error) {
 	query := `
 		SELECT pr.id::text, pr.product_id, pr.store_id, s.name,

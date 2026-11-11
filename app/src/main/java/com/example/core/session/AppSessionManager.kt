@@ -25,6 +25,12 @@ object AppSessionManager {
     private const val KEY_AUTH_TOKEN = "key_auth_token"
     private const val KEY_KARMA_POINTS = "key_karma_points"
     private const val KEY_SAVED_ADDRESSES = "key_saved_addresses"
+    private const val KEY_NOTIFY_PRICE_DROPS = "key_notify_price_drops"
+    private const val KEY_NOTIFY_FRESHNESS = "key_notify_freshness"
+    private const val KEY_NOTIFY_POINTS = "key_notify_points"
+    private const val KEY_AUTO_SYNC_WIFI = "key_auto_sync_wifi"
+    private const val KEY_COMPRESS_IMAGES = "key_compress_images"
+    private const val KEY_PREFERRED_RADIUS_KM = "key_preferred_radius_km"
 
     private var prefs: SharedPreferences? = null
 
@@ -140,27 +146,12 @@ object AppSessionManager {
     fun getAuthToken(): String = prefs?.getString(KEY_AUTH_TOKEN, "") ?: ""
 
     /**
-     * Retrieves saved delivery addresses (Home, Work, Other) persisted locally.
+     * Retrieves saved addresses persisted locally by the user.
      */
     fun getSavedAddresses(): List<SavedAddress> {
         val raw = prefs?.getString(KEY_SAVED_ADDRESSES, null)
         if (raw.isNullOrBlank()) {
-            return listOf(
-                SavedAddress(
-                    label = "Home",
-                    addressLine = "42 Camden High Street",
-                    locality = "Camden Town, London NW1",
-                    latitude = 51.5390,
-                    longitude = -0.1426
-                ),
-                SavedAddress(
-                    label = "Work",
-                    addressLine = "10 Pancras Square",
-                    locality = "King's Cross, London N1C",
-                    latitude = 51.5339,
-                    longitude = -0.1257
-                )
-            )
+            return emptyList()
         }
         return try {
             val array = JSONArray(raw)
@@ -226,6 +217,39 @@ object AppSessionManager {
             array.put(obj)
         }
         prefs?.edit()?.putString(KEY_SAVED_ADDRESSES, array.toString())?.apply()
+    }
+
+    data class PersistedSettings(
+        val notifyPriceDrops: Boolean = true,
+        val notifyFreshnessAlerts: Boolean = true,
+        val notifyCommunityPoints: Boolean = true,
+        val autoSyncOnWifi: Boolean = true,
+        val compressReceiptImages: Boolean = true,
+        val preferredRadiusKm: Double = 1.5
+    )
+
+    fun getSettings(): PersistedSettings {
+        val p = prefs ?: return PersistedSettings()
+        return PersistedSettings(
+            notifyPriceDrops = p.getBoolean(KEY_NOTIFY_PRICE_DROPS, true),
+            notifyFreshnessAlerts = p.getBoolean(KEY_NOTIFY_FRESHNESS, true),
+            notifyCommunityPoints = p.getBoolean(KEY_NOTIFY_POINTS, true),
+            autoSyncOnWifi = p.getBoolean(KEY_AUTO_SYNC_WIFI, true),
+            compressReceiptImages = p.getBoolean(KEY_COMPRESS_IMAGES, true),
+            preferredRadiusKm = p.getFloat(KEY_PREFERRED_RADIUS_KM, 1.5f).toDouble()
+        )
+    }
+
+    fun saveSettings(update: (PersistedSettings) -> PersistedSettings) {
+        val next = update(getSettings())
+        prefs?.edit()
+            ?.putBoolean(KEY_NOTIFY_PRICE_DROPS, next.notifyPriceDrops)
+            ?.putBoolean(KEY_NOTIFY_FRESHNESS, next.notifyFreshnessAlerts)
+            ?.putBoolean(KEY_NOTIFY_POINTS, next.notifyCommunityPoints)
+            ?.putBoolean(KEY_AUTO_SYNC_WIFI, next.autoSyncOnWifi)
+            ?.putBoolean(KEY_COMPRESS_IMAGES, next.compressReceiptImages)
+            ?.putFloat(KEY_PREFERRED_RADIUS_KM, next.preferredRadiusKm.toFloat())
+            ?.apply()
     }
 }
 

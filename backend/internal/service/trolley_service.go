@@ -50,6 +50,16 @@ func (s *TrolleyService) GenerateWhisper(ctx context.Context, productID, current
 		return nil, err
 	}
 
+	// Fetch all active store prices for this product in one query to avoid N+1 DB calls.
+	allProductPrices, err := s.priceRepo.GetStorePrices(ctx, productID)
+	if err != nil {
+		return nil, err
+	}
+	priceByStore := make(map[string]domain.PriceRecord, len(allProductPrices))
+	for _, pr := range allProductPrices {
+		priceByStore[pr.StoreID] = pr
+	}
+
 	cheapestPricePence := effectiveCurrentPence
 	var cheapestStore *domain.Store
 
@@ -57,8 +67,8 @@ func (s *TrolleyService) GenerateWhisper(ctx context.Context, productID, current
 		if st.ID == currentStoreID {
 			continue
 		}
-		pr, err := s.priceRepo.GetLatestPrice(ctx, productID, st.ID)
-		if err != nil {
+		pr, ok := priceByStore[st.ID]
+		if !ok {
 			continue
 		}
 		eff := pr.RegularPricePence

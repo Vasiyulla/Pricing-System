@@ -43,80 +43,38 @@ func NewAIService() *AIService {
 	}
 }
 
-// ParseReceiptImage extracts items, prices, VAT, and loyalty discounts from a supermarket receipt
+// ParseReceiptImage extracts items, prices, VAT, and loyalty discounts from a supermarket receipt.
+// Fails transparently with ErrVisionAINotConfigured when no upstream vision model is configured or succeeds.
 func (s *AIService) ParseReceiptImage(ctx context.Context, imageBase64 string) (*domain.ExtractedReceipt, error) {
-	if imageBase64 != "" {
-		// Priority 1: NVIDIA NIM (Open-Source Llama 3.2 Vision / Qwen 2.5 VL via Cloud API)
-		if s.nvidiaAPIKey != "" {
-			result, err := s.callNvidiaNIMForReceipt(ctx, imageBase64)
-			if err == nil && result != nil {
-				return result, nil
-			}
-			log.Printf("[AIService] NVIDIA NIM error: %v. Attempting fallback...", err)
-		}
-
-		// Priority 2: Google Gemini Vision
-		if s.geminiAPIKey != "" {
-			result, err := s.callGeminiVisionForReceipt(ctx, imageBase64)
-			if err == nil && result != nil {
-				return result, nil
-			}
-			log.Printf("[AIService] Gemini Vision error: %v. Falling back to mock...", err)
-		}
+	if strings.TrimSpace(imageBase64) == "" {
+		return nil, fmt.Errorf("image_base64 is required")
+	}
+	if s.nvidiaAPIKey == "" && s.geminiAPIKey == "" {
+		return nil, ErrVisionAINotConfigured
 	}
 
-	// High-fidelity fallback / mock data for UK Supermarket receipt testing
-	return &domain.ExtractedReceipt{
-		StoreName:      "Tesco Express",
-		BranchNumber:   "2214 - Camden High St",
-		VATNumber:      "GB 220 4302 31",
-		Date:           time.Now().Format("02/01/2006 14:32"),
-		TotalPence:     1185,
-		VATAmountPence: 45,
-		IsMathValid:    true,
-		Items: []domain.ExtractedLineItem{
-			{
-				Name:              "Lurpak Slightly Salted Spreadable Butter 500g",
-				Quantity:          1,
-				RegularPricePence: 450,
-				LoyaltyPricePence: intPtr(300),
-				LoyaltyScheme:     domain.LoyaltyClubcard,
-				VATRatePercent:    0,
-			},
-			{
-				Name:              "Cathedral City Mature Cheddar 350g",
-				Quantity:          1,
-				RegularPricePence: 380,
-				LoyaltyPricePence: intPtr(250),
-				LoyaltyScheme:     domain.LoyaltyClubcard,
-				VATRatePercent:    0,
-			},
-			{
-				Name:              "British Whole Milk 4 Pints 2.27L",
-				Quantity:          1,
-				RegularPricePence: 165,
-				LoyaltyPricePence: nil,
-				LoyaltyScheme:     domain.LoyaltyNone,
-				VATRatePercent:    0,
-			},
-			{
-				Name:              "Warburtons Toastie Thick White 800g",
-				Quantity:          1,
-				RegularPricePence: 145,
-				LoyaltyPricePence: nil,
-				LoyaltyScheme:     domain.LoyaltyNone,
-				VATRatePercent:    0,
-			},
-			{
-				Name:              "Tesco Everyday Carrier Bag",
-				Quantity:          1,
-				RegularPricePence: 45,
-				LoyaltyPricePence: nil,
-				LoyaltyScheme:     domain.LoyaltyNone,
-				VATRatePercent:    20, // Carrier bags carry standard 20% VAT in the UK
-			},
-		},
-	}, nil
+	var lastErr error
+	// Priority 1: NVIDIA NIM
+	if s.nvidiaAPIKey != "" {
+		result, err := s.callNvidiaNIMForReceipt(ctx, imageBase64)
+		if err == nil && result != nil {
+			return result, nil
+		}
+		lastErr = err
+		log.Printf("[AIService] NVIDIA NIM receipt parse error: %v", err)
+	}
+
+	// Priority 2: Google Gemini Vision
+	if s.geminiAPIKey != "" {
+		result, err := s.callGeminiVisionForReceipt(ctx, imageBase64)
+		if err == nil && result != nil {
+			return result, nil
+		}
+		lastErr = err
+		log.Printf("[AIService] Gemini Vision receipt parse error: %v", err)
+	}
+
+	return nil, fmt.Errorf("receipt OCR extraction failed: %w", lastErr)
 }
 
 // ParseYellowSticker extracts clearance markdown information from a yellow sticker photo using Vision AI.

@@ -81,29 +81,6 @@ data class TrolleySampleItem(
     val voiceScript: String
 )
 
-private val FALLBACK_TROLLEY_ITEMS = listOf(
-    TrolleySampleItem(
-        id = "prod_lurpak",
-        name = "Lurpak Slightly Salted 500g",
-        storePrice = "£4.50",
-        bestAlternativePrice = "£3.00",
-        altStoreName = "Tesco Express Camden",
-        distance = "220m away",
-        recommendation = "SKIP",
-        voiceScript = "Lurpak 500g is £4.50 here. Wait! Tesco Express 220 metres away has it for £3.00 with Clubcard."
-    ),
-    TrolleySampleItem(
-        id = "prod_whole_milk",
-        name = "British Whole Milk 4 Pints",
-        storePrice = "£1.48",
-        bestAlternativePrice = "£1.48",
-        altStoreName = "Aldi Camden",
-        distance = "0m",
-        recommendation = "BUY",
-        voiceScript = "Put it in the trolley! British Whole Milk is at the best nearby price right here at £1.48."
-    )
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrolleyEarScreen(
@@ -113,10 +90,11 @@ fun TrolleyEarScreen(
     val scope = rememberCoroutineScope()
     val repository = PriceBridgeRepositoryProvider.repository
 
-    var trolleyItems by remember { mutableStateOf(FALLBACK_TROLLEY_ITEMS) }
+    var trolleyItems by remember { mutableStateOf<List<TrolleySampleItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
     var isListening by remember { mutableStateOf(true) }
     var currentItemIndex by remember { mutableStateOf(0) }
-    val currentItem = trolleyItems.getOrElse(currentItemIndex) { FALLBACK_TROLLEY_ITEMS.first() }
+    val currentItem = trolleyItems.getOrNull(currentItemIndex)
 
     var ttsEngine by remember { mutableStateOf<TextToSpeech?>(null) }
     var isTtsReady by remember { mutableStateOf(false) }
@@ -162,41 +140,44 @@ fun TrolleyEarScreen(
         withContext(Dispatchers.IO) {
             try {
                 val loc = repository.getLocation().firstOrNull()
-                val lat = loc?.latitude?.takeIf { it != 0.0 } ?: 51.5390
-                val lon = loc?.longitude?.takeIf { it != 0.0 } ?: -0.1426
+                val lat = loc?.latitude ?: 0.0
+                val lon = loc?.longitude ?: 0.0
                 val stores = repository.getNearbyStores().firstOrNull().orEmpty()
-                val currentStoreId = stores.firstOrNull()?.id ?: "store_tesco_camden"
-                val products = repository.getAllProducts().firstOrNull().orEmpty().take(6)
+                val currentStoreId = stores.firstOrNull()?.id
 
-                val fetched = products.mapNotNull { prod ->
-                    try {
-                        val whisper = ApiClient.service.getTrolleyWhisper(prod.id, currentStoreId, lat, lon)
-                        val curPrice = "£%.2f".format(whisper.currentPricePence / 100.0)
-                        val altStore = whisper.alternativeStore?.name ?: "Current Store"
-                        val altPricePence = (whisper.currentPricePence - (whisper.potentialSavingsPence ?: 0)).coerceAtLeast(10)
-                        val altPrice = "£%.2f".format(altPricePence / 100.0)
-                        val distStr = whisper.alternativeStore?.distanceKm?.let {
-                            if (it < 1.0) "${(it * 1000).toInt()}m away" else "%.1f km away".format(it)
-                        } ?: "Nearby"
-                        TrolleySampleItem(
-                            id = prod.id,
-                            name = whisper.productName.ifBlank { prod.name },
-                            storePrice = curPrice,
-                            bestAlternativePrice = altPrice,
-                            altStoreName = altStore,
-                            distance = distStr,
-                            recommendation = whisper.recommendation,
-                            voiceScript = whisper.whisperText
-                        )
-                    } catch (_: Exception) {
-                        null
+                if ((lat != 0.0 || lon != 0.0) && currentStoreId != null) {
+                    val products = repository.getAllProducts().firstOrNull().orEmpty().take(6)
+                    val fetched = products.mapNotNull { prod ->
+                        try {
+                            val whisper = ApiClient.service.getTrolleyWhisper(prod.id, currentStoreId, lat, lon)
+                            val curPrice = String.format(Locale.UK, "£%.2f", whisper.currentPricePence / 100.0)
+                            val altStore = whisper.alternativeStore?.name ?: "Current Store"
+                            val altPricePence = (whisper.currentPricePence - (whisper.potentialSavingsPence ?: 0)).coerceAtLeast(10)
+                            val altPrice = String.format(Locale.UK, "£%.2f", altPricePence / 100.0)
+                            val distStr = whisper.alternativeStore?.distanceKm?.let {
+                                if (it < 1.0) "${(it * 1000).toInt()}m away" else String.format(Locale.UK, "%.1f km away", it)
+                            } ?: "Nearby"
+                            TrolleySampleItem(
+                                id = prod.id,
+                                name = whisper.productName.ifBlank { prod.name },
+                                storePrice = curPrice,
+                                bestAlternativePrice = altPrice,
+                                altStoreName = altStore,
+                                distance = distStr,
+                                recommendation = whisper.recommendation,
+                                voiceScript = whisper.whisperText
+                            )
+                        } catch (_: Exception) {
+                            null
+                        }
                     }
-                }
-                if (fetched.isNotEmpty()) {
                     trolleyItems = fetched
                     currentItemIndex = 0
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            } finally {
+                isLoading = false
+            }
         }
     }
 
@@ -208,16 +189,17 @@ fun TrolleyEarScreen(
     }
 
     fun speakAdvice(text: String) {
-        if (isListening && isTtsReady) {
+        if (isListening && isTtsReady && text.isNotBlank()) {
             ttsEngine?.stop()
             ttsEngine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "trolley_advice")
         }
     }
 
-    // Speak initial item when TTS becomes ready
-    LaunchedEffect(isTtsReady) {
-        if (isTtsReady) {
-            speakAdvice(currentItem.voiceScript)
+    // Speak initial item when TTS and live items are ready
+    LaunchedEffect(isTtsReady, trolleyItems) {
+        val script = currentItem?.voiceScript
+        if (isTtsReady && !script.isNullOrBlank()) {
+            speakAdvice(script)
         }
     }
 
@@ -233,6 +215,48 @@ fun TrolleyEarScreen(
             )
         }
     ) { innerPadding ->
+        if (currentItem == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Headphones,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Text(
+                        text = if (isLoading) {
+                            "Checking tracked stores near your location…"
+                        } else {
+                            "No nearby tracked stores for live audio coaching yet"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (isLoading) {
+                            "Gathering nearby shelf prices for real-time comparison."
+                        } else {
+                            "Audio coaching activates automatically when tracked stores and live price reports exist near your selected location."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(onClick = onNavigateBack) {
+                        Text("Go Back")
+                    }
+                }
+            }
+        } else {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -423,6 +447,7 @@ fun TrolleyEarScreen(
                     }
                 }
             }
+        }
         }
     }
 }

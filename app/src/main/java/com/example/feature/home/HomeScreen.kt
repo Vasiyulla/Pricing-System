@@ -34,7 +34,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NearMe
@@ -141,7 +140,6 @@ fun HomeScreen(
     onNavigateToYellowStickers: () -> Unit = {},
     onNavigateToBounties: () -> Unit = {},
     onNavigateToCopilot: () -> Unit = {},
-    onNavigateToAddProduct: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel()
 ) {
@@ -180,7 +178,6 @@ fun HomeScreen(
         onNavigateToYellowStickers = onNavigateToYellowStickers,
         onNavigateToBounties = onNavigateToBounties,
         onNavigateToCopilot = onNavigateToCopilot,
-        onNavigateToAddProduct = onNavigateToAddProduct,
         modifier = modifier
     )
 }
@@ -200,7 +197,6 @@ fun HomeContent(
     onNavigateToYellowStickers: () -> Unit = {},
     onNavigateToBounties: () -> Unit = {},
     onNavigateToCopilot: () -> Unit = {},
-    onNavigateToAddProduct: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -567,16 +563,6 @@ fun HomeContent(
                                 onToggleItemChecked = { onEvent(HomeUiEvent.OnToggleHomeBasketItem(it)) },
                                 onUpdateItemQty = { id, qty -> onEvent(HomeUiEvent.OnUpdateHomeBasketQty(id, qty)) },
                                 onDeleteItem = { onEvent(HomeUiEvent.OnDeleteHomeBasketItem(it)) }
-                            )
-                        }
-
-                        // Products Added by You (strictly user-contributed, independent of nearby store deals)
-                        item(key = "home_my_added_products") {
-                            HomeMyAddedProductsCard(
-                                products = uiState.myAddedProducts,
-                                onAddProductClick = onNavigateToAddProduct,
-                                onProductClick = { onEvent(HomeUiEvent.OnProductClicked(it)) },
-                                onViewAllProfileClick = { onEvent(HomeUiEvent.OnBottomNavClicked(BottomBarDestination.Profile)) }
                             )
                         }
 
@@ -2028,180 +2014,6 @@ private val previewCategories = listOf(
     Category("Dairy & Chilled", "Dairy & Chilled"),
     Category("Bakery", "Bakery")
 )
-
-/**
- * Inline summary of products added by the signed-in user ("till now I had added N products").
- * Displayed independently of nearby store coverage so users can always track their own additions.
- */
-@Composable
-private fun HomeMyAddedProductsCard(
-    products: List<Product>,
-    onAddProductClick: () -> Unit,
-    onProductClick: (String) -> Unit,
-    onViewAllProfileClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = MaterialTheme.spacing.spaceMd)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.secondaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Inventory2,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "Your Added Products (${products.size})",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = if (products.isEmpty()) {
-                                "Products you add on the app appear here"
-                            } else {
-                                "Total added by you on the app so far: ${products.size}"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                OutlinedButton(
-                    onClick = onAddProductClick,
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Add", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            if (products.isEmpty()) {
-                Text(
-                    text = "No products added by you yet. Tap Add to register a new product in the catalog.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    products.take(4).forEach { product ->
-                        Surface(
-                            onClick = { onProductClick(product.id) },
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = product.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    val subtitle = listOfNotNull(
-                                        product.categoryId.takeIf { it.isNotBlank() },
-                                        product.quantityDescription.takeIf { it.isNotBlank() }
-                                    ).joinToString(" · ")
-                                    if (subtitle.isNotBlank()) {
-                                        Text(
-                                            text = subtitle,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                                val mrp = product.bestStorePrice.mrp
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    if (mrp > 0.0) {
-                                        Text(
-                                            text = String.format(java.util.Locale.UK, "£%.2f", mrp),
-                                            style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                    Icon(
-                                        imageVector = Icons.Default.ChevronRight,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (products.size > 4) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = onViewAllProfileClick) {
-                            Text("View All ${products.size} in Profile", fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Icon(
-                                imageVector = Icons.Default.ChevronRight,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Preview(name = "Home - Content Light", showBackground = true)
 @Composable

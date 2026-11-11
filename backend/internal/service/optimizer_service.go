@@ -37,9 +37,22 @@ func (s *OptimizerService) OptimizeTwoStopBasket(ctx context.Context, items []do
 	if err != nil {
 		return nil, err
 	}
+	if len(stores) == 0 {
+		return nil, fmt.Errorf("no nearby tracked stores available for basket calculation")
+	}
 
-	// Fetch all price records
-	allPrices, err := s.priceRepo.GetAllPrices(ctx)
+	productIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.ProductID != "" {
+			productIDs = append(productIDs, item.ProductID)
+		}
+	}
+	storeIDs := make([]string, 0, len(stores))
+	for _, st := range stores {
+		storeIDs = append(storeIDs, st.ID)
+	}
+
+	allPrices, err := s.priceRepo.GetLatestPricesForProductsAndStores(ctx, productIDs, storeIDs)
 	if err != nil {
 		return nil, err
 	}

@@ -59,7 +59,8 @@ data class YellowStickerItem(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun YellowStickerScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToScan: () -> Unit = {}
 ) {
     val liveDeals by PriceBridgeRepositoryProvider.repository.getActiveYellowStickers()
         .collectAsState(initial = emptyList())
@@ -105,7 +106,7 @@ fun YellowStickerScreen(
 
             // Action Button
             Button(
-                onClick = { /* Scan yellow sticker camera flow */ },
+                onClick = onNavigateToScan,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF57F17)),
                 shape = RoundedCornerShape(10.dp)

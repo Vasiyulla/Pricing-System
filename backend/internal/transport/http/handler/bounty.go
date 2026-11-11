@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"pricebridge/backend/internal/domain"
 	"pricebridge/backend/internal/repository"
 	"pricebridge/backend/internal/transport/http/respond"
 )
@@ -29,17 +30,20 @@ func NewBountyHandler(
 }
 
 func (h *BountyHandler) GetNearby(w http.ResponseWriter, r *http.Request) {
-	lat, _ := strconv.ParseFloat(r.URL.Query().Get("lat"), 64)
-	lon, _ := strconv.ParseFloat(r.URL.Query().Get("lon"), 64)
-	if lat == 0 && lon == 0 {
-		lat = 51.5390
-		lon = -0.1426
+	lat, latErr := strconv.ParseFloat(r.URL.Query().Get("lat"), 64)
+	lon, lonErr := strconv.ParseFloat(r.URL.Query().Get("lon"), 64)
+	if latErr != nil || lonErr != nil || (lat == 0 && lon == 0) {
+		respond.JSON(w, http.StatusOK, []domain.Bounty{})
+		return
 	}
 
 	bounties, err := h.bountyRepo.GetNearby(r.Context(), lat, lon, 10.0)
 	if err != nil {
 		respond.Error(w, r, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if bounties == nil {
+		bounties = []domain.Bounty{}
 	}
 	respond.JSON(w, http.StatusOK, bounties)
 }
@@ -75,6 +79,9 @@ func (h *BountyHandler) GetCategories(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if categories == nil {
+		categories = []domain.Category{}
+	}
 	respond.JSON(w, http.StatusOK, categories)
 }
 
@@ -84,6 +91,9 @@ func (h *BountyHandler) GetActiveYellowStickers(w http.ResponseWriter, r *http.R
 	if err != nil {
 		respond.Error(w, r, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if deals == nil {
+		deals = []domain.YellowStickerDeal{}
 	}
 	respond.JSON(w, http.StatusOK, deals)
 }

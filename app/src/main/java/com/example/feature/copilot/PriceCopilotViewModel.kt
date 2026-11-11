@@ -7,8 +7,8 @@ import com.example.core.data.PriceBridgeRepositoryProvider
 import com.example.core.model.Product
 import com.example.core.model.Store
 import com.example.core.model.StorePrice
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +18,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class PriceCopilotViewModel(
-    private val repository: PriceBridgeRepository = PriceBridgeRepositoryProvider.repository
+    private val repository: PriceBridgeRepository = PriceBridgeRepositoryProvider.repository,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CopilotUiState())
@@ -87,7 +88,7 @@ class PriceCopilotViewModel(
      * Grounded RAG Query Processor.
      * Answers strictly from catalog, user contributions, basket state, and nearby store prices.
      */
-    private suspend fun processGroundedQuery(query: String): ChatMessage = withContext(Dispatchers.IO) {
+    private suspend fun processGroundedQuery(query: String): ChatMessage = withContext(ioDispatcher) {
         val lower = query.lowercase().trim()
 
         // 1. User-added products / contributions query
