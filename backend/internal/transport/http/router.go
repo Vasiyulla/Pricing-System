@@ -135,6 +135,7 @@ func NewRouter(
 			r.Use(rateLimiter.Middleware("ai", 10, time.Minute))
 			r.Post("/receipt-scan", h.AI.ScanReceipt)
 			r.Post("/yellow-sticker-scan", h.AI.ScanYellowSticker)
+			r.Post("/shelf-tag-scan", h.AI.ScanShelfTag)
 		})
 
 		// Admin Controls

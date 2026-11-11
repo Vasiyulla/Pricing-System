@@ -317,13 +317,9 @@ func (r *memoryPriceRepo) GetBestDealsSingleQuery(ctx context.Context, lat, lon,
 			continue
 		}
 		summary := domain.ProductDealSummary{
-			Product:             prod,
-			BestPricePence:      int(math.Round(prod.TargetMRP * 100)),
-			BestPriceGBP:        fmt.Sprintf("£%.2f", prod.TargetMRP),
-			BestStoreName:       "Nearby Supermarket",
-			BestStoreDistanceKm: 0.5,
-			ComparedStoreCount:  1,
-			FreshnessStatus:     domain.FreshnessRecentlyObserved,
+			Product:            prod,
+			ComparedStoreCount: 0,
+			FreshnessStatus:    domain.FreshnessRecentlyObserved,
 		}
 		bestEff := math.MaxInt32
 		for _, rec := range r.ms.prices[prod.ID] {
@@ -353,7 +349,9 @@ func (r *memoryPriceRepo) GetBestDealsSingleQuery(ctx context.Context, lat, lon,
 			}
 			summary.ComparedStoreCount++
 		}
-		summaries = append(summaries, summary)
+		if summary.ComparedStoreCount > 0 {
+			summaries = append(summaries, summary)
+		}
 	}
 	return summaries, nil
 }

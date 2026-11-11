@@ -1,8 +1,6 @@
 package com.example.feature.scan
 
 import android.app.Application
-import android.graphics.BitmapFactory
-import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.core.data.PriceBridgeRepositoryProvider
@@ -10,6 +8,7 @@ import com.example.core.data.PriceBridgeRepository
 import com.example.core.model.PriceStatusBadgeType
 import com.example.core.model.Product
 import com.example.core.model.StorePrice
+import com.example.core.network.ApiClient
 import com.example.core.vision.PriceVisionOcrEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.File
+import java.util.Locale
 import java.util.UUID
 
 class ScanViewModel @JvmOverloads constructor(
@@ -30,6 +29,28 @@ class ScanViewModel @JvmOverloads constructor(
 
     private val _uiState = MutableStateFlow(ScanUiState())
     val uiState: StateFlow<ScanUiState> = _uiState.asStateFlow()
+
+    init {
+        loadLiveSuggestions()
+    }
+
+    private fun loadLiveSuggestions() {
+        viewModelScope.launch {
+            val stores = runCatching { repository.getNearbyStores().firstOrNull() }.getOrNull().orEmpty()
+            val products = runCatching { repository.getAllProducts().firstOrNull() }.getOrNull().orEmpty()
+
+            val storeNames = stores.map { it.name }.filter { it.isNotBlank() }.distinct().take(6)
+            val productNames = products.map { it.name }.filter { it.isNotBlank() }.distinct().take(6)
+
+            _uiState.update { current ->
+                current.copy(
+                    nearbyStoreSuggestions = if (storeNames.isNotEmpty()) storeNames else current.nearbyStoreSuggestions,
+                    popularProductSuggestions = if (productNames.isNotEmpty()) productNames else current.popularProductSuggestions,
+                    storeNameInput = current.storeNameInput.ifBlank { storeNames.firstOrNull() ?: current.storeNameInput }
+                )
+            }
+        }
+    }
 
     fun onEvent(event: ScanUiEvent) {
         when (event) {
@@ -48,6 +69,10 @@ class ScanViewModel @JvmOverloads constructor(
                         capturedPhotoUri = null,
                         rawOcrText = null,
                         isProcessingOcr = false,
+                        isOcrDetected = false,
+                        isLowConfidenceOcr = false,
+                        ocrConfidenceScore = null,
+                        ocrSourceLabel = "On-Device OCR",
                         isScanning = true,
                         isSubmitSuccess = false
                     )
@@ -76,8 +101,14 @@ class ScanViewModel @JvmOverloads constructor(
                 _uiState.update {
                     it.copy(
                         capturedPhotoUri = null,
+                        rawOcrText = null,
                         productNameInput = "",
                         priceInput = "",
+                        mrpInput = "",
+                        isOcrDetected = false,
+                        isLowConfidenceOcr = false,
+                        ocrConfidenceScore = null,
+                        ocrSourceLabel = "On-Device OCR",
                         isSubmitSuccess = false,
                         isScanning = true
                     )
@@ -262,73 +293,112 @@ class ScanViewModel @JvmOverloads constructor(
 
     private fun handlePhotoCaptured(event: ScanUiEvent.OnPhotoCaptured) {
         val uriStr = event.photoUri
+        if (uriStr == "sample_shelf_label") {
+            _uiState.update {
+                it.copy(
+                    capturedPhotoUri = uriStr,
+                    isScanning = false,
+                    isProcessingOcr = false,
+                    isOcrDetected = true,
+                    isLowConfidenceOcr = false,
+                    ocrConfidenceScore = 98,
+                    ocrSourceLabel = "Sample Shelf Tag"
+                )
+            }
+            return
+        }
+
         _uiState.update {
             it.copy(
                 capturedPhotoUri = uriStr,
                 isScanning = false,
-                isProcessingOcr = true
+                isProcessingOcr = true,
+                isOcrDetected = false,
+                isLowConfidenceOcr = false,
+                productNameInput = "",
+                priceInput = "",
+                mrpInput = ""
             )
         }
 
         viewModelScope.launch(Dispatchers.IO) {
+            var bestProductName: String? = null
+            var bestPriceStr = ""
+            var bestMrpStr = ""
+            var bestUnit: String? = null
+            var bestStore: String? = null
+            var bestRawText: String? = null
+            var bestConfidence = 0
+            var sourceLabel = "On-Device OCR"
+
             try {
-                // 1. Resolve bitmap from direct bitmap or file path / Uri
-                val bitmap = when {
-                    event.bitmap != null -> event.bitmap
-                    uriStr.startsWith("content://") || uriStr.startsWith("file://") -> {
-                        val parsedUri = Uri.parse(uriStr)
-                        @Suppress("DEPRECATION")
-                        android.provider.MediaStore.Images.Media.getBitmap(
-                            getApplication<Application>().contentResolver,
-                            parsedUri
-                        )
-                    }
-                    File(uriStr).exists() -> {
-                        BitmapFactory.decodeFile(uriStr)
-                    }
-                    else -> null
+                // 1. Fast EXIF-aware On-Device ML Kit Spatial OCR (<100ms)
+                val visionText = ocrEngine.processImagePathOrUri(uriStr, event.bitmap)
+                if (visionText != null && visionText.text.isNotBlank()) {
+                    val tagResult = ocrEngine.parseShelfTag(visionText)
+                    bestProductName = tagResult.detectedProductName
+                    bestPriceStr = tagResult.detectedPrice?.let { String.format(Locale.UK, "%.2f", it) } ?: ""
+                    bestMrpStr = tagResult.detectedMrp?.let { String.format(Locale.UK, "%.2f", it) } ?: ""
+                    bestUnit = tagResult.detectedUnit
+                    bestStore = tagResult.detectedStoreName
+                    bestRawText = tagResult.rawText
+                    bestConfidence = tagResult.confidenceScore
                 }
 
-                if (bitmap != null) {
-                    val visionText = ocrEngine.processBitmap(bitmap)
-                    if (visionText != null && visionText.text.isNotBlank()) {
-                        val tagResult = ocrEngine.parseShelfTag(visionText)
-                        val detectedPriceStr = tagResult.detectedPrice?.let { p ->
-                            if (p % 1.0 == 0.0) p.toInt().toString() else p.toString()
-                        } ?: ""
-                        val detectedMrpStr = tagResult.detectedMrp?.let { m ->
-                            if (m % 1.0 == 0.0) m.toInt().toString() else m.toString()
-                        } ?: ""
+                // 2. Hybrid Multimodal Vision AI fallback if local OCR missed fields or confidence < 85
+                val isRealFile = !uriStr.startsWith("sample_") &&
+                    !uriStr.startsWith("photo_captured_") &&
+                    uriStr != "captured_product_photo"
+                if (isRealFile && (bestConfidence < 85 || bestProductName.isNullOrBlank() || bestPriceStr.isBlank())) {
+                    val b64 = ocrEngine.loadUprightScaledJpegBase64(uriStr, event.bitmap, maxDimPx = 1024)
+                    if (!b64.isNullOrBlank()) {
+                        val aiTag = runCatching {
+                            ApiClient.service.scanShelfTagAI(mapOf("image_base64" to b64))
+                        }.getOrNull()
 
-                        _uiState.update { current ->
-                            current.copy(
-                                isProcessingOcr = false,
-                                isOcrDetected = detectedPriceStr.isNotBlank() || !tagResult.detectedProductName.isNullOrBlank(),
-                                ocrConfidenceScore = tagResult.confidenceScore,
-                                rawOcrText = tagResult.rawText,
-                                priceInput = detectedPriceStr.ifBlank { current.priceInput.ifBlank { "135" } },
-                                mrpInput = detectedMrpStr.ifBlank { current.mrpInput.ifBlank { "150" } },
-                                productNameInput = tagResult.detectedProductName ?: current.productNameInput.ifBlank { "Supermarket Shelf Product" },
-                                unitInput = tagResult.detectedUnit ?: current.unitInput,
-                                storeNameInput = tagResult.detectedStoreName ?: current.storeNameInput
-                            )
+                        if (aiTag != null && aiTag.productName.isNotBlank() && aiTag.confidence >= bestConfidence) {
+                            bestProductName = aiTag.productName
+                            if (aiTag.pricePence > 0) {
+                                bestPriceStr = String.format(Locale.UK, "%.2f", aiTag.pricePence / 100.0)
+                            }
+                            if (aiTag.unit.isNotBlank()) {
+                                bestUnit = aiTag.unit
+                            }
+                            if (aiTag.storeName.isNotBlank()) {
+                                bestStore = aiTag.storeName
+                            }
+                            bestConfidence = aiTag.confidence.coerceIn(0, 99)
+                            sourceLabel = "Vision AI Extracted"
                         }
-                        return@launch
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
 
-            // Fallback if OCR returned empty
+            val hasUsefulExtraction = !bestProductName.isNullOrBlank() || bestPriceStr.isNotBlank()
+            val isLowConfidence = !hasUsefulExtraction || bestConfidence < 70 ||
+                bestProductName.isNullOrBlank() || bestPriceStr.isBlank()
+
             _uiState.update { current ->
+                val resolvedStore = bestStore?.let { detected ->
+                    current.nearbyStoreSuggestions.firstOrNull {
+                        it.contains(detected, ignoreCase = true)
+                    } ?: detected
+                } ?: current.storeNameInput
+
                 current.copy(
                     isProcessingOcr = false,
-                    isOcrDetected = false,
-                    ocrConfidenceScore = null,
-                    priceInput = current.priceInput.ifBlank { "135" },
-                    mrpInput = current.mrpInput.ifBlank { "150" },
-                    productNameInput = current.productNameInput.ifBlank { "Supermarket Shelf Product" }
+                    isOcrDetected = hasUsefulExtraction,
+                    isLowConfidenceOcr = isLowConfidence,
+                    ocrConfidenceScore = bestConfidence.takeIf { it > 0 },
+                    ocrSourceLabel = sourceLabel,
+                    rawOcrText = bestRawText,
+                    priceInput = bestPriceStr,
+                    mrpInput = bestMrpStr,
+                    productNameInput = bestProductName ?: "",
+                    unitInput = bestUnit ?: current.unitInput,
+                    storeNameInput = resolvedStore
                 )
             }
         }

@@ -511,17 +511,20 @@ private fun CameraViewfinderContent(
                 onCaptureClick = onCaptureRealPhoto,
                 onSampleTagClick = { tag ->
                     when (tag) {
-                        "Fortune Oil" -> {
-                            onEvent(ScanUiEvent.OnProductNameChanged("Fortune Sunlite Sunflower Oil 1L"))
-                            onEvent(ScanUiEvent.OnPriceChanged("142"))
+                        "Arla Yogurt" -> {
+                            onEvent(ScanUiEvent.OnProductNameChanged("Arla Protein Strawberry Yogurt Pouch 200g"))
+                            onEvent(ScanUiEvent.OnPriceChanged("1.50"))
+                            onEvent(ScanUiEvent.OnUnitChanged("200 g"))
                         }
-                        "Atta 5kg" -> {
-                            onEvent(ScanUiEvent.OnProductNameChanged("Aashirvaad Shubh Chakki Atta 5kg"))
-                            onEvent(ScanUiEvent.OnPriceChanged("245"))
+                        "Lurpak Butter" -> {
+                            onEvent(ScanUiEvent.OnProductNameChanged("Lurpak Slightly Salted Butter 500g"))
+                            onEvent(ScanUiEvent.OnPriceChanged("3.00"))
+                            onEvent(ScanUiEvent.OnUnitChanged("500 g"))
                         }
                         else -> {
-                            onEvent(ScanUiEvent.OnProductNameChanged("Amul Butter 500g"))
-                            onEvent(ScanUiEvent.OnPriceChanged("275"))
+                            onEvent(ScanUiEvent.OnProductNameChanged("Warburtons Toastie White 800g"))
+                            onEvent(ScanUiEvent.OnPriceChanged("1.45"))
+                            onEvent(ScanUiEvent.OnUnitChanged("1 pack"))
                         }
                     }
                     onEvent(ScanUiEvent.OnPhotoCaptured("sample_shelf_label"))
@@ -593,24 +596,24 @@ private fun CameraShutterBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             AssistChip(
-                onClick = { onSampleTagClick("Fortune Oil") },
-                label = { Text("📸 Fortune Oil Tag") },
+                onClick = { onSampleTagClick("Arla Yogurt") },
+                label = { Text("📸 Arla Yogurt £1.50") },
                 colors = AssistChipDefaults.assistChipColors(
                     containerColor = Color.White.copy(alpha = 0.12f),
                     labelColor = Color.White
                 )
             )
             AssistChip(
-                onClick = { onSampleTagClick("Atta 5kg") },
-                label = { Text("🧾 Atta 5kg Receipt") },
+                onClick = { onSampleTagClick("Lurpak Butter") },
+                label = { Text("🧾 Lurpak 500g £3.00") },
                 colors = AssistChipDefaults.assistChipColors(
                     containerColor = Color.White.copy(alpha = 0.12f),
                     labelColor = Color.White
                 )
             )
             AssistChip(
-                onClick = { onSampleTagClick("Amul Butter") },
-                label = { Text("🏷️ Amul Butter Shelf") },
+                onClick = { onSampleTagClick("Warburtons Bread") },
+                label = { Text("🏷️ Warburtons £1.45") },
                 colors = AssistChipDefaults.assistChipColors(
                     containerColor = Color.White.copy(alpha = 0.12f),
                     labelColor = Color.White
@@ -874,8 +877,8 @@ private fun CapturedPriceFormView(
             }
         }
 
-        // ── 1c. ML Kit Vision AI Auto-Extraction Banner ──
-        if (uiState.isOcrDetected && !uiState.isProcessingOcr) {
+        // ── 1c. OCR / Vision AI Extraction Banner ──
+        if (!uiState.isProcessingOcr && uiState.isOcrDetected && !uiState.isLowConfidenceOcr) {
             Surface(
                 shape = RoundedCornerShape(14.dp),
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
@@ -895,13 +898,46 @@ private fun CapturedPriceFormView(
                     )
                     Column {
                         Text(
-                            text = "ML Kit Vision AI Auto-Extracted",
+                            text = "${uiState.ocrSourceLabel} Auto-Extracted",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "Shelf price & product details detected with ${uiState.ocrConfidenceScore ?: 96}% confidence",
+                            text = "Shelf price & product details detected with ${uiState.ocrConfidenceScore ?: 80}% confidence",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else if (!uiState.isProcessingOcr && uiState.isLowConfidenceOcr && uiState.capturedPhotoUri != null) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = Color(0xFFF59E0B).copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.45f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color(0xFFD97706),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Column {
+                        Text(
+                            text = "Please Verify Shelf Details",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFB45309)
+                        )
+                        Text(
+                            text = "Could not clearly read every field from the photo. Please check or enter the product name and £ price below.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1016,7 +1052,7 @@ private fun CapturedPriceFormView(
             OutlinedTextField(
                 value = uiState.priceInput,
                 onValueChange = { onEvent(ScanUiEvent.OnPriceChanged(it)) },
-                placeholder = { Text("e.g. 142") },
+                placeholder = { Text("e.g. 1.50") },
                 singleLine = true,
                 leadingIcon = {
                     Text(
@@ -1042,7 +1078,7 @@ private fun CapturedPriceFormView(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            val units = listOf("1 L", "1 kg", "500 g", "250 g", "100 g", "1 pc")
+            val units = listOf("200 g", "500 g", "1 kg", "1 L", "250 ml", "1 pack")
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1180,12 +1216,12 @@ private fun BarcodeControlsArea(
             modifier = Modifier.padding(bottom = 4.dp)
         )
         val testBarcodes = listOf(
-            "Fortune Oil" to "8901030383709",
-            "Amul Milk" to "8901262010058",
-            "Atta 5kg" to "8901725181222",
-            "Maggi" to "8901058852881",
-            "Dettol" to "8901030825315",
-            "New Item" to "8909999000001"
+            "Whole Milk" to "5000119001010",
+            "Lurpak 500g" to "5740900401826",
+            "Warburtons" to "5010044000701",
+            "Heinz Beans" to "5000157024671",
+            "Cheddar" to "5011032001021",
+            "New Item" to "5099999000001"
         )
         Row(
             modifier = Modifier
@@ -1596,22 +1632,22 @@ private fun ManualBarcodeBottomSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     AssistChip(
-                        onClick = { onTextChanged("8901030383742") },
-                        label = { Text("Tata Salt (1kg)") },
+                        onClick = { onTextChanged("5000119001010") },
+                        label = { Text("Whole Milk (4 Pints)") },
                         colors = AssistChipDefaults.assistChipColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                         )
                     )
                     AssistChip(
-                        onClick = { onTextChanged("8901262010052") },
-                        label = { Text("Amul Butter (500g)") },
+                        onClick = { onTextChanged("5740900401826") },
+                        label = { Text("Lurpak Butter (500g)") },
                         colors = AssistChipDefaults.assistChipColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                         )
                     )
                     AssistChip(
-                        onClick = { onTextChanged("8901725181222") },
-                        label = { Text("Fortune Oil (1L)") },
+                        onClick = { onTextChanged("5010044000701") },
+                        label = { Text("Warburtons (800g)") },
                         colors = AssistChipDefaults.assistChipColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                         )

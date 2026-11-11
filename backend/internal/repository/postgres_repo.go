@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
-	"math"
 	"sort"
 	"strings"
 	"time"
@@ -706,10 +705,10 @@ func (r *pgPriceRepo) GetBestDealsSingleQuery(ctx context.Context, lat, lon, rad
 		       s.id, s.chain, s.format, s.name, s.address, s.postcode, s.lat, s.lon, ROUND(s.distance_km::numeric, 2)::float8,
 		       lp.regular_price_pence, lp.loyalty_price_pence, lp.loyalty_scheme, lp.effective_price_pence, lp.freshness_status, lp.observed_at
 		FROM products p
-		LEFT JOIN latest_prices lp ON p.id = lp.product_id
-		LEFT JOIN nearby_stores s ON lp.store_id = s.id
+		INNER JOIN latest_prices lp ON p.id = lp.product_id
+		INNER JOIN nearby_stores s ON lp.store_id = s.id
 		WHERE ($4 = '' OR p.category = $4)
-		ORDER BY p.name ASC, lp.effective_price_pence ASC NULLS LAST;
+		ORDER BY p.name ASC, lp.effective_price_pence ASC;
 	`
 
 	rows, err := r.pool.Query(ctx, query, lat, lon, radiusMeters, category)
@@ -738,21 +737,16 @@ func (r *pgPriceRepo) GetBestDealsSingleQuery(ctx context.Context, lat, lon, rad
 			continue
 		}
 
-		summary, exists := grouped[prod.ID]
-		if !exists {
-			summary = &domain.ProductDealSummary{
-				Product:             prod,
-				BestPricePence:      int(math.Round(prod.TargetMRP * 100)),
-				BestPriceGBP:        fmt.Sprintf("£%.2f", prod.TargetMRP),
-				BestStoreName:       "Nearby Supermarket",
-				BestStoreDistanceKm: 0.5,
-				FreshnessStatus:     domain.FreshnessRecentlyObserved,
-			}
-			grouped[prod.ID] = summary
-			order = append(order, prod.ID)
-		}
-
 		if storeID != nil && effPence != nil {
+			summary, exists := grouped[prod.ID]
+			if !exists {
+				summary = &domain.ProductDealSummary{
+					Product: prod,
+				}
+				grouped[prod.ID] = summary
+				order = append(order, prod.ID)
+			}
+
 			comp := domain.StorePriceComparison{
 				Store: domain.Store{
 					ID:         *storeID,
@@ -796,10 +790,9 @@ func (r *pgPriceRepo) GetBestDealsSingleQuery(ctx context.Context, lat, lon, rad
 	out := make([]domain.ProductDealSummary, 0, len(order))
 	for _, id := range order {
 		s := grouped[id]
-		if s.ComparedStoreCount == 0 {
-			s.ComparedStoreCount = 1
+		if s.ComparedStoreCount > 0 {
+			out = append(out, *s)
 		}
-		out = append(out, *s)
 	}
 	return out, nil
 }
@@ -829,8 +822,7 @@ func (r *pgBountyRepo) GetNearby(ctx context.Context, lat, lon, radiusKm float64
 
 	rows, err := r.pool.Query(ctx, query, lat, lon, radiusMeters)
 	if err != nil {
-		// Fallback without PostGIS if spatial query fails
-		return r.getNearbyFallback(ctx)
+		return nil, err
 	}
 	defer rows.Close()
 

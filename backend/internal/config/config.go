@@ -21,6 +21,9 @@ type Config struct {
 	S3Endpoint         string
 	S3Bucket           string
 	LocalUploadDir     string
+	RoutingProvider    string
+	OSRMBaseURL        string
+	GoogleMapsAPIKey   string
 }
 
 // Load parses environment variables with safe defaults and startup checks.
@@ -64,6 +67,20 @@ func Load() (*Config, error) {
 		uploadDir = "./data/evidence"
 	}
 
+	googleMapsKey := strings.TrimSpace(os.Getenv("GOOGLE_MAPS_API_KEY"))
+	routingProvider := strings.ToLower(strings.TrimSpace(os.Getenv("ROUTING_PROVIDER")))
+	if routingProvider == "" {
+		if googleMapsKey != "" {
+			routingProvider = "google"
+		} else {
+			routingProvider = "osrm"
+		}
+	}
+	osrmBaseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("OSRM_BASE_URL")), "/")
+	if osrmBaseURL == "" {
+		osrmBaseURL = "https://router.project-osrm.org"
+	}
+
 	cfg := &Config{
 		Env:                env,
 		Port:               port,
@@ -78,6 +95,9 @@ func Load() (*Config, error) {
 		S3Endpoint:         strings.TrimSpace(os.Getenv("S3_ENDPOINT")),
 		S3Bucket:           strings.TrimSpace(os.Getenv("S3_BUCKET")),
 		LocalUploadDir:     uploadDir,
+		RoutingProvider:    routingProvider,
+		OSRMBaseURL:        osrmBaseURL,
+		GoogleMapsAPIKey:   googleMapsKey,
 	}
 
 	if err := cfg.Validate(); err != nil {

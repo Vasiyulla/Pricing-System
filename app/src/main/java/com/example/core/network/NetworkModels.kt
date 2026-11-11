@@ -13,7 +13,10 @@ data class NetworkStore(
     val longitude: Double,
     val address: String,
     val postcode: String,
-    @Json(name = "distance_km") val distanceKm: Double? = null
+    @Json(name = "distance_km") val distanceKm: Double? = null,
+    @Json(name = "duration_minutes") val durationMinutes: Int? = null,
+    @Json(name = "route_mode") val routeMode: String? = null,
+    @Json(name = "is_exact_route") val isExactRoute: Boolean = false
 )
 
 @JsonClass(generateAdapter = true)
@@ -155,6 +158,19 @@ data class NetworkExtractedReceipt(
 )
 
 @JsonClass(generateAdapter = true)
+data class NetworkExtractedShelfTag(
+    @Json(name = "product_name") val productName: String = "",
+    val brand: String = "",
+    val unit: String = "",
+    @Json(name = "price_pence") val pricePence: Int = 0,
+    @Json(name = "loyalty_price_pence") val loyaltyPricePence: Int? = null,
+    @Json(name = "loyalty_scheme") val loyaltyScheme: String = "",
+    @Json(name = "store_name") val storeName: String = "",
+    val confidence: Int = 0,
+    val source: String = ""
+)
+
+@JsonClass(generateAdapter = true)
 data class NetworkCategory(
     val id: String,
     val name: String
@@ -177,6 +193,9 @@ data class NetworkProductDealSummary(
     @Json(name = "best_store_name") val bestStoreName: String,
     @Json(name = "best_store_id") val bestStoreId: String = "",
     @Json(name = "best_store_distance_km") val bestStoreDistanceKm: Double = 0.5,
+    @Json(name = "best_store_duration_minutes") val bestStoreDurationMinutes: Int? = null,
+    @Json(name = "best_store_route_mode") val bestStoreRouteMode: String? = null,
+    @Json(name = "is_exact_route") val isExactRoute: Boolean = false,
     @Json(name = "compared_store_count") val comparedStoreCount: Int = 1,
     @Json(name = "freshness_status") val freshnessStatus: String = "RECENTLY_OBSERVED",
     val alternatives: List<NetworkStorePriceComparison> = emptyList()

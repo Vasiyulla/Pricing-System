@@ -87,6 +87,9 @@ type Store struct {
 	Address            string                  `json:"address"`
 	Postcode           string                  `json:"postcode"`
 	DistanceKm         float64                 `json:"distance_km,omitempty"`
+	DurationMinutes    int                     `json:"duration_minutes,omitempty"`
+	RouteMode          string                  `json:"route_mode,omitempty"`
+	IsExactRoute       bool                    `json:"is_exact_route,omitempty"`
 	VerificationStatus StoreVerificationStatus `json:"verification_status,omitempty"`
 	ReliabilityScore   int                     `json:"reliability_score,omitempty"`
 	IsConfirmedPartner bool                    `json:"is_confirmed_partner,omitempty"`
@@ -245,6 +248,19 @@ type ExtractedLineItem struct {
 	VATRatePercent    int           `json:"vat_rate_percent"` // 0 for food, 20 for non-food
 }
 
+// ExtractedShelfTag represents multimodal shelf-tag or product-page extraction
+type ExtractedShelfTag struct {
+	ProductName       string `json:"product_name"`
+	Brand             string `json:"brand,omitempty"`
+	Unit              string `json:"unit,omitempty"`
+	PricePence        int    `json:"price_pence"`
+	LoyaltyPricePence *int   `json:"loyalty_price_pence,omitempty"`
+	LoyaltyScheme     string `json:"loyalty_scheme,omitempty"`
+	StoreName         string `json:"store_name,omitempty"`
+	Confidence        int    `json:"confidence"`
+	Source            string `json:"source"`
+}
+
 // YellowStickerDeal represents a clearance markdown deal
 type YellowStickerDeal struct {
 	ID             string    `json:"id"`
@@ -275,10 +291,13 @@ type ProductDealSummary struct {
 	Product             Product                `json:"product"`
 	BestPricePence      int                    `json:"best_price_pence"`
 	BestPriceGBP        string                 `json:"best_price_gbp"`
-	BestStoreName       string                 `json:"best_store_name"`
-	BestStoreID         string                 `json:"best_store_id"`
-	BestStoreDistanceKm float64                `json:"best_store_distance_km"`
-	ComparedStoreCount  int                    `json:"compared_store_count"`
+	BestStoreName         string                 `json:"best_store_name"`
+	BestStoreID           string                 `json:"best_store_id"`
+	BestStoreDistanceKm   float64                `json:"best_store_distance_km"`
+	BestStoreDurationMins int                    `json:"best_store_duration_minutes,omitempty"`
+	BestStoreRouteMode    string                 `json:"best_store_route_mode,omitempty"`
+	IsExactRoute          bool                   `json:"is_exact_route,omitempty"`
+	ComparedStoreCount    int                    `json:"compared_store_count"`
 	FreshnessStatus     FreshnessStatus        `json:"freshness_status"`
 	Alternatives        []StorePriceComparison `json:"alternatives,omitempty"`
 }

@@ -36,7 +36,8 @@ data class HomeUiState(
     val notifications: List<AppNotification> = emptyList(),
     val isNotificationsSheetOpen: Boolean = false,
     val activeProximityStore: Store? = null,
-    val proximityDistanceMeters: Float? = null
+    val proximityDistanceMeters: Float? = null,
+    val routeMode: String = "walking"
 ) {
     val unreadNotificationsCount: Int get() = notifications.count { !it.isRead }
     val isEmpty: Boolean get() = !isLoading && errorMessage == null && deals.isEmpty()
@@ -67,4 +68,5 @@ sealed interface HomeUiEvent {
     data class OnRetryQueuedSubmission(val submissionId: String) : HomeUiEvent
     data class OnCancelQueuedSubmission(val submissionId: String) : HomeUiEvent
     data object OnDismissProximityAlert : HomeUiEvent
+    data class OnRouteModeChanged(val mode: String) : HomeUiEvent
 }

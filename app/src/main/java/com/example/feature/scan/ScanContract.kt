@@ -19,28 +19,30 @@ data class ScanUiState(
     val capturedPhotoUri: String? = null,
     val rawOcrText: String? = null,
     val productNameInput: String = "",
-    val storeNameInput: String = "More Supermarket, Indiranagar",
+    val storeNameInput: String = "",
     val priceInput: String = "",
     val mrpInput: String = "",
-    val unitInput: String = "1 L",
+    val unitInput: String = "200 g",
     val evidenceType: String = "Shelf Tag",
     val ocrConfidenceScore: Int? = null,
+    val ocrSourceLabel: String = "On-Device OCR",
     val isOcrDetected: Boolean = false,
+    val isLowConfidenceOcr: Boolean = false,
     val isSubmittingPrice: Boolean = false,
     val isSubmitSuccess: Boolean = false,
     val nearbyStoreSuggestions: List<String> = listOf(
-        "More Supermarket, Indiranagar",
-        "Reliance Smart, 100ft Rd",
-        "Nilgiris Supermarket",
-        "Apna Bazar Kirana",
-        "MK Ahmed Supermarket"
+        "Tesco Express",
+        "Sainsbury's Local",
+        "Aldi",
+        "Lidl",
+        "M&S Foodhall"
     ),
     val popularProductSuggestions: List<String> = listOf(
-        "Fortune Sunlite Sunflower Oil 1L",
-        "Aashirvaad Shubh Chakki Atta 5kg",
-        "Amul Butter 500g",
-        "Tata Salt 1kg",
-        "Maggi 2-Minute Noodles 4-Pack"
+        "Arla Protein Strawberry Yogurt Pouch 200g",
+        "Lurpak Slightly Salted Butter 500g",
+        "Warburtons Toastie White 800g",
+        "British Whole Milk 2.27L",
+        "Cathedral City Mature Cheddar 350g"
     ),
 
     // Barcode scanning state (backward-compatible)

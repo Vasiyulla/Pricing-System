@@ -100,7 +100,7 @@
     <string name="section_store_splits">Optimized Store Routing</string>
     <string name="btn_add_item">Add Item</string>
     <string name="dialog_add_item_title">Add to Shopping List</string>
-    <string name="input_item_name">Item name (e.g. Fortune Oil, Amul Milk)</string>
+    <string name="input_item_name">Item name (e.g. Whole Milk, Lurpak Butter)</string>
     <string name="input_quantity">Quantity</string>
     <string name="input_package_size">Package size (e.g. 1L, 500g)</string>
     <string name="btn_confirm_add">Add to Basket</string>
@@ -153,9 +153,9 @@
     <string name="profile_recent_submissions">Recent Submissions</string>
 
     <!-- Freshness Verification Prompt (Plan Section 2) -->
-    <string name="prompt_still_price_title">Still £%1$.0f at %2$s?</string>
+    <string name="prompt_still_price_title">Still £%1$.2f at %2$s?</string>
     <string name="prompt_still_price_subtitle">This price was observed %1$s. Help your neighbors keep prices accurate!</string>
-    <string name="btn_yes_still_price">Yes, Still £%1$.0f</string>
+    <string name="btn_yes_still_price">Yes, Still £%1$.2f</string>
     <string name="btn_no_price_changed">Price Changed</string>
     <string name="freshness_confirmed_toast">Thank you! Price verified for %1$s. +5 Points earned.</string>
 
@@ -170,7 +170,7 @@
     <string name="discrepancy_reason_store_refused">Store refused to honor price</string>
     <string name="discrepancy_reason_out_of_stock">Item out of stock / unavailable</string>
     <string name="discrepancy_notes_label">Additional details (optional)</string>
-    <string name="discrepancy_notes_placeholder">e.g. Counter said £155 instead of £142 today morning</string>
+    <string name="discrepancy_notes_placeholder">e.g. Counter said £1.65 instead of £1.45 this morning</string>
     <string name="btn_submit_discrepancy">Report Discrepancy</string>
     <string name="discrepancy_success_toast">Discrepancy reported. Community trust score updated. +10 Points earned.</string>
 
@@ -188,7 +188,7 @@
     <!-- Add Product Screen (Plan Sprint 3b) -->
     <string name="add_product_title">Add Product</string>
     <string name="add_product_name_label">Product Name</string>
-    <string name="add_product_name_placeholder">e.g. Aashirvaad Shubh Chakki Atta</string>
+    <string name="add_product_name_placeholder">e.g. Warburtons Toastie White 800g</string>
     <string name="add_product_category_label">Category</string>
     <string name="add_product_pack_label">Package Size / Unit</string>
     <string name="add_product_pack_placeholder">e.g. 1L Pouch, 5kg Bag, 500g</string>
@@ -206,7 +206,7 @@
     <string name="dpdp_consent_title">DPDP Privacy &amp; Trust Notice</string>
     <string name="dpdp_consent_subtitle">Compliant with the Digital Personal Data Protection Act 2023</string>
     <string name="dpdp_point_location_title">On-Demand Approximate Location</string>
-    <string name="dpdp_point_location_desc">Used solely to cluster nearby supermarkets and kiranas when you search. No background tracking ever.</string>
+    <string name="dpdp_point_location_desc">Used solely to cluster nearby supermarkets and local stores when you search. No background tracking ever.</string>
     <string name="dpdp_point_privacy_title">Pseudonymized Price Ledger</string>
     <string name="dpdp_point_privacy_desc">Price contributions are recorded on a public ledger for community benefit, but your personal identifiers and phone number are never exposed.</string>
     <string name="dpdp_point_erasure_title">Right to Correction &amp; Erasure</string>

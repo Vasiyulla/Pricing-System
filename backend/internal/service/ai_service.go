@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +15,9 @@ import (
 
 	"pricebridge/backend/internal/domain"
 )
+
+// ErrVisionAINotConfigured indicates no upstream multimodal AI API key is configured.
+var ErrVisionAINotConfigured = errors.New("vision AI API key is not configured")
 
 type AIService struct {
 	geminiAPIKey string
@@ -115,30 +119,156 @@ func (s *AIService) ParseReceiptImage(ctx context.Context, imageBase64 string) (
 	}, nil
 }
 
-// ParseYellowSticker extracts clearance markdown information from a yellow sticker photo
+// ParseYellowSticker extracts clearance markdown information from a yellow sticker photo using Vision AI.
+// Never returns fake mock data when Vision AI keys are unconfigured or fail.
 func (s *AIService) ParseYellowSticker(ctx context.Context, imageBase64 string) (*domain.YellowStickerDeal, error) {
-	// Returns verified clearance deal
-	return &domain.YellowStickerDeal{
-		ID:              fmt.Sprintf("ys_%d", time.Now().UnixNano()),
-		StoreID:         "store_ms_covent_garden",
-		StoreName:       "M&S Foodhall Covent Garden",
-		ProductName:     "M&S British Fresh Chicken Breast Fillets (Clearance)",
-		WasPricePence:   650,
-		NowPricePence:   195,
-		DiscountPercent: 70,
-		UseByDate:       "Today (Reduced to clear)",
-		ExpiresAt:       time.Now().Add(3 * time.Hour),
-	}, nil
+	cleanBase64 := strings.TrimSpace(imageBase64)
+	if cleanBase64 == "" {
+		return nil, fmt.Errorf("empty image payload")
+	}
+	if s.nvidiaAPIKey == "" && s.geminiAPIKey == "" {
+		return nil, ErrVisionAINotConfigured
+	}
+
+	prompt := `You are an expert UK supermarket yellow-sticker clearance markdown parser.
+Extract accurate product and markdown pricing details from the sticker photo:
+- store_name: supermarket name if visible (e.g. "Tesco", "Sainsbury's", "M&S", "Waitrose", "Asda"), else ""
+- product_name: full product title on sticker
+- was_price_pence: original price in pence (e.g. £6.50 -> 650)
+- now_price_pence: reduced clearance price in pence (e.g. £1.95 -> 195)
+- discount_percent: integer 0-99
+- use_by_date: e.g. "Today (Reduced to clear)" or printed date
+Respond strictly with valid JSON without markdown formatting:
+{
+  "store_name": "",
+  "product_name": "...",
+  "was_price_pence": 0,
+  "now_price_pence": 0,
+  "discount_percent": 0,
+  "use_by_date": "Today"
+}`
+
+	type yellowStickerAI struct {
+		StoreName       string `json:"store_name"`
+		ProductName     string `json:"product_name"`
+		WasPricePence   int    `json:"was_price_pence"`
+		NowPricePence   int    `json:"now_price_pence"`
+		DiscountPercent int    `json:"discount_percent"`
+		UseByDate       string `json:"use_by_date"`
+	}
+
+	parseResp := func(raw []byte) *domain.YellowStickerDeal {
+		var parsed yellowStickerAI
+		if err := json.Unmarshal(raw, &parsed); err != nil || strings.TrimSpace(parsed.ProductName) == "" || parsed.NowPricePence <= 0 {
+			return nil
+		}
+		disc := parsed.DiscountPercent
+		if disc <= 0 && parsed.WasPricePence > parsed.NowPricePence {
+			disc = ((parsed.WasPricePence - parsed.NowPricePence) * 100) / parsed.WasPricePence
+		}
+		return &domain.YellowStickerDeal{
+			ID:              fmt.Sprintf("ys_%d", time.Now().UnixNano()),
+			StoreName:       parsed.StoreName,
+			ProductName:     parsed.ProductName,
+			WasPricePence:   parsed.WasPricePence,
+			NowPricePence:   parsed.NowPricePence,
+			DiscountPercent: disc,
+			UseByDate:       parsed.UseByDate,
+			ExpiresAt:       time.Now().Add(3 * time.Hour),
+		}
+	}
+
+	if s.nvidiaAPIKey != "" {
+		if raw, err := s.callNvidiaVisionJSON(ctx, cleanBase64, prompt, 500); err == nil {
+			if deal := parseResp(raw); deal != nil {
+				return deal, nil
+			}
+		} else {
+			log.Printf("[AIService] NVIDIA NIM yellow-sticker error: %v", err)
+		}
+	}
+
+	if s.geminiAPIKey != "" {
+		if raw, err := s.callGeminiVisionJSON(ctx, cleanBase64, prompt); err == nil {
+			if deal := parseResp(raw); deal != nil {
+				return deal, nil
+			}
+		} else {
+			log.Printf("[AIService] Gemini Vision yellow-sticker error: %v", err)
+		}
+	}
+
+	return nil, fmt.Errorf("yellow sticker vision AI extraction failed")
+}
+
+// ParseShelfTagImage extracts product, single-unit price, pack size, and store/loyalty info from a shelf tag or product screenshot.
+// Unlike ParseReceiptImage, it NEVER returns mock data when Vision AI keys are unconfigured or fail.
+func (s *AIService) ParseShelfTagImage(ctx context.Context, imageBase64 string) (*domain.ExtractedShelfTag, error) {
+	cleanBase64 := strings.TrimSpace(imageBase64)
+	if cleanBase64 == "" {
+		return nil, fmt.Errorf("empty image payload")
+	}
+	if s.nvidiaAPIKey == "" && s.geminiAPIKey == "" {
+		return nil, ErrVisionAINotConfigured
+	}
+
+	prompt := `You are an expert UK supermarket shelf-tag and product-listing vision parser.
+Extract accurate product and single-unit price details from the image.
+Rules:
+- product_name: full clear product title including flavour/variant and pack size if printed (ignore browser tabs, ratings, "Add" buttons, or clipped background text).
+- brand: manufacturer/brand name if obvious, else "".
+- unit: pack size such as "200g", "500g", "1kg", "1L", "250ml", "4 pack", or "".
+- price_pence: regular single-item selling price in pence (e.g. £1.50 -> 150, 75p -> 75). NEVER pick per-unit comparison rates like "£7.50/kg", star ratings ("4 stars"), review counts ("59 Reviews"), or multi-buy denominators ("5 for £5") as price_pence.
+- loyalty_price_pence: integer pence if a distinct loyalty single-unit price is shown, else null.
+- loyalty_scheme: "CLUBCARD", "NECTAR", "LIDL_PLUS", or "NONE".
+- store_name: supermarket name if visible OR inferred from loyalty branding (e.g. "Clubcard" -> "Tesco", "Nectar" -> "Sainsbury's", "Lidl Plus" -> "Lidl"), else "".
+- confidence: integer 0-100 reflecting true legibility.
+Respond strictly with valid JSON without markdown code blocks:
+{
+  "product_name": "...",
+  "brand": "",
+  "unit": "",
+  "price_pence": 0,
+  "loyalty_price_pence": null,
+  "loyalty_scheme": "NONE",
+  "store_name": "",
+  "confidence": 90
+}`
+
+	if s.nvidiaAPIKey != "" {
+		raw, err := s.callNvidiaVisionJSON(ctx, cleanBase64, prompt, 600)
+		if err == nil {
+			var tag domain.ExtractedShelfTag
+			if uErr := json.Unmarshal(raw, &tag); uErr == nil && strings.TrimSpace(tag.ProductName) != "" {
+				tag.Source = "nvidia_nim"
+				return &tag, nil
+			} else if uErr != nil {
+				log.Printf("[AIService] NVIDIA shelf-tag JSON parse error: %v", uErr)
+			}
+		} else {
+			log.Printf("[AIService] NVIDIA NIM shelf-tag error: %v", err)
+		}
+	}
+
+	if s.geminiAPIKey != "" {
+		raw, err := s.callGeminiVisionJSON(ctx, cleanBase64, prompt)
+		if err == nil {
+			var tag domain.ExtractedShelfTag
+			if uErr := json.Unmarshal(raw, &tag); uErr == nil && strings.TrimSpace(tag.ProductName) != "" {
+				tag.Source = "gemini_vision"
+				return &tag, nil
+			} else if uErr != nil {
+				log.Printf("[AIService] Gemini shelf-tag JSON parse error: %v", uErr)
+			}
+		} else {
+			log.Printf("[AIService] Gemini Vision shelf-tag error: %v", err)
+		}
+	}
+
+	return nil, fmt.Errorf("vision AI extraction failed")
 }
 
 func (s *AIService) callGeminiVisionForReceipt(ctx context.Context, imageBase64 string) (*domain.ExtractedReceipt, error) {
-	cleanBase64 := imageBase64
-	if idx := strings.Index(cleanBase64, ","); idx != -1 {
-		cleanBase64 = cleanBase64[idx+1:]
-	}
-
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s", s.geminiAPIKey)
-
 	prompt := `You are an expert UK supermarket receipt OCR parser.
 Extract the store name, branch/store number, VAT number, receipt date, total in pence, and line items.
 For each line item extract:
@@ -168,6 +298,82 @@ Respond strictly with valid JSON matching this schema:
   ],
   "is_math_valid": true
 }`
+
+	raw, err := s.callGeminiVisionJSON(ctx, imageBase64, prompt)
+	if err != nil {
+		return nil, err
+	}
+	var extracted domain.ExtractedReceipt
+	if err := json.Unmarshal(raw, &extracted); err != nil {
+		return nil, err
+	}
+	return &extracted, nil
+}
+
+func (s *AIService) callNvidiaNIMForReceipt(ctx context.Context, imageBase64 string) (*domain.ExtractedReceipt, error) {
+	prompt := `You are an expert UK supermarket receipt OCR parser.
+Extract the store name, branch/store number, VAT number, receipt date, total in pence, and line items.
+For each line item extract:
+- name: string
+- quantity: int
+- regular_price_pence: int
+- loyalty_price_pence: int or null (e.g. Tesco Clubcard / Sainsbury's Nectar savings)
+- loyalty_scheme: 'CLUBCARD', 'NECTAR', 'LIDL_PLUS', or 'NONE'
+- vat_rate_percent: 0 for food/produce, 20 for non-food
+Respond strictly with valid JSON without any markdown formatting or code blocks:
+{
+  "store_name": "...",
+  "branch_number": "...",
+  "vat_number": "...",
+  "date": "...",
+  "total_pence": 0,
+  "vat_amount_pence": 0,
+  "items": [
+    {
+      "name": "...",
+      "quantity": 1,
+      "regular_price_pence": 0,
+      "loyalty_price_pence": null,
+      "loyalty_scheme": "NONE",
+      "vat_rate_percent": 0
+    }
+  ],
+  "is_math_valid": true
+}`
+
+	raw, err := s.callNvidiaVisionJSON(ctx, imageBase64, prompt, 1500)
+	if err != nil {
+		return nil, err
+	}
+	var extracted domain.ExtractedReceipt
+	if err := json.Unmarshal(raw, &extracted); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal nvidia nim json: %w (raw: %s)", err, string(raw))
+	}
+	return &extracted, nil
+}
+
+func stripBase64DataPrefix(imageBase64 string) string {
+	if idx := strings.Index(imageBase64, ","); idx != -1 {
+		return imageBase64[idx+1:]
+	}
+	return imageBase64
+}
+
+func stripMarkdownJSONFence(content string) string {
+	content = strings.TrimSpace(content)
+	if strings.HasPrefix(content, "```json") {
+		content = strings.TrimPrefix(content, "```json")
+		content = strings.TrimSuffix(content, "```")
+	} else if strings.HasPrefix(content, "```") {
+		content = strings.TrimPrefix(content, "```")
+		content = strings.TrimSuffix(content, "```")
+	}
+	return strings.TrimSpace(content)
+}
+
+func (s *AIService) callGeminiVisionJSON(ctx context.Context, imageBase64, prompt string) ([]byte, error) {
+	cleanBase64 := stripBase64DataPrefix(imageBase64)
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s", s.geminiAPIKey)
 
 	requestBody := map[string]interface{}{
 		"contents": []map[string]interface{}{
@@ -223,58 +429,16 @@ Respond strictly with valid JSON matching this schema:
 	if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
 		return nil, err
 	}
-
 	if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
 		return nil, fmt.Errorf("empty response from gemini")
 	}
 
-	rawJSON := geminiResp.Candidates[0].Content.Parts[0].Text
-	var extracted domain.ExtractedReceipt
-	if err := json.Unmarshal([]byte(rawJSON), &extracted); err != nil {
-		return nil, err
-	}
-
-	return &extracted, nil
+	return []byte(stripMarkdownJSONFence(geminiResp.Candidates[0].Content.Parts[0].Text)), nil
 }
 
-func (s *AIService) callNvidiaNIMForReceipt(ctx context.Context, imageBase64 string) (*domain.ExtractedReceipt, error) {
-	cleanBase64 := imageBase64
-	if idx := strings.Index(cleanBase64, ","); idx != -1 {
-		cleanBase64 = cleanBase64[idx+1:]
-	}
-
+func (s *AIService) callNvidiaVisionJSON(ctx context.Context, imageBase64, prompt string, maxTokens int) ([]byte, error) {
+	cleanBase64 := stripBase64DataPrefix(imageBase64)
 	url := "https://integrate.api.nvidia.com/v1/chat/completions"
-
-	prompt := `You are an expert UK supermarket receipt OCR parser.
-Extract the store name, branch/store number, VAT number, receipt date, total in pence, and line items.
-For each line item extract:
-- name: string
-- quantity: int
-- regular_price_pence: int
-- loyalty_price_pence: int or null (e.g. Tesco Clubcard / Sainsbury's Nectar savings)
-- loyalty_scheme: 'CLUBCARD', 'NECTAR', 'LIDL_PLUS', or 'NONE'
-- vat_rate_percent: 0 for food/produce, 20 for non-food
-Respond strictly with valid JSON without any markdown formatting or code blocks:
-{
-  "store_name": "...",
-  "branch_number": "...",
-  "vat_number": "...",
-  "date": "...",
-  "total_pence": 0,
-  "vat_amount_pence": 0,
-  "items": [
-    {
-      "name": "...",
-      "quantity": 1,
-      "regular_price_pence": 0,
-      "loyalty_price_pence": null,
-      "loyalty_scheme": "NONE",
-      "vat_rate_percent": 0
-    }
-  ],
-  "is_math_valid": true
-}`
-
 	imageURI := fmt.Sprintf("data:image/jpeg;base64,%s", cleanBase64)
 
 	requestBody := map[string]interface{}{
@@ -294,7 +458,7 @@ Respond strictly with valid JSON without any markdown formatting or code blocks:
 			},
 		},
 		"temperature": 0.1,
-		"max_tokens":  1500,
+		"max_tokens":  maxTokens,
 	}
 
 	bodyBytes, err := json.Marshal(requestBody)
@@ -331,27 +495,11 @@ Respond strictly with valid JSON without any markdown formatting or code blocks:
 	if err := json.NewDecoder(resp.Body).Decode(&openAIResp); err != nil {
 		return nil, err
 	}
-
 	if len(openAIResp.Choices) == 0 {
 		return nil, fmt.Errorf("empty response from nvidia nim")
 	}
 
-	content := strings.TrimSpace(openAIResp.Choices[0].Message.Content)
-	if strings.HasPrefix(content, "```json") {
-		content = strings.TrimPrefix(content, "```json")
-		content = strings.TrimSuffix(content, "```")
-	} else if strings.HasPrefix(content, "```") {
-		content = strings.TrimPrefix(content, "```")
-		content = strings.TrimSuffix(content, "```")
-	}
-	content = strings.TrimSpace(content)
-
-	var extracted domain.ExtractedReceipt
-	if err := json.Unmarshal([]byte(content), &extracted); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal nvidia nim json: %w (raw: %s)", err, content)
-	}
-
-	return &extracted, nil
+	return []byte(stripMarkdownJSONFence(openAIResp.Choices[0].Message.Content)), nil
 }
 
 func intPtr(v int) *int {

@@ -24,7 +24,7 @@ data class CopilotUiState(
     val messages: List<ChatMessage> = listOf(
         ChatMessage(
             sender = MessageSender.COPILOT,
-            text = "Hello! I am your Price Bridge AI Copilot. I analyze live nearby kiranas and supermarkets in real-time. Ask me to compare products, find cheap staples, or evaluate grocery deals!",
+            text = "Hello! I am your Price Bridge AI Copilot. I analyze live nearby supermarkets and local stores in real-time. Ask me to compare products, find cheap staples, or evaluate grocery deals!",
             intentTag = "WELCOME"
         )
     ),

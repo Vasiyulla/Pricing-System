@@ -134,10 +134,15 @@ func RunAPI() {
 	var geoCache *cache.GeoSpatialCache
 	if rdb != nil {
 		geoCache = cache.NewGeoSpatialCache(rdb)
+		if err := geoCache.PurgeSyntheticStores(rootCtx); err != nil {
+			logger.Warn("failed to purge synthetic live stores from Redis", "error", err)
+		}
 	}
 
+	routeSvc := service.NewRouteService(cfg.RoutingProvider, cfg.OSRMBaseURL, cfg.GoogleMapsAPIKey, rdb)
 	compareSvc := service.NewCompareService(repos.store, repos.price, rdb)
-	optimizerSvc := service.NewOptimizerService(repos.store, repos.price)
+	compareSvc.SetRouteService(routeSvc)
+	optimizerSvc := service.NewOptimizerService(repos.store, repos.price, routeSvc)
 	trolleySvc := service.NewTrolleyService(repos.store, repos.product, repos.price)
 	aiSvc := service.NewAIService()
 	storeVerifier := service.NewStoreVerifier(repos.store, repos.discrepancy)
@@ -152,7 +157,7 @@ func RunAPI() {
 
 	storeHandler := handler.NewStoreHandler(
 		repos.store, repos.product, repos.price, repos.bounty, repos.sticker,
-		storeVerifier, geoCache, &bgWG,
+		storeVerifier, geoCache, routeSvc, &bgWG,
 	)
 
 	router := httptransport.NewRouter(
@@ -161,7 +166,7 @@ func RunAPI() {
 			Health:   handler.NewHealthHandler(repos.pgPing, rdb, metrics),
 			Auth:     handler.NewAuthHandler(client.NewNeonAuthClient(cfg.NeonAuthURL), client.NewGoogleOAuthClient(), repos.session, sessionStore),
 			Store:    storeHandler,
-			Product:  handler.NewProductHandler(repos.product, repos.price, repos.store, compareSvc, trolleySvc, storeHandler),
+			Product:  handler.NewProductHandler(repos.product, repos.price, repos.store, compareSvc, trolleySvc, storeHandler, routeSvc),
 			Price:    handler.NewPriceHandler(repos.price, repos.product, repos.session, compareSvc),
 			Basket:   handler.NewBasketHandler(optimizerSvc),
 			Bounty:   handler.NewBountyHandler(repos.bounty, repos.category, repos.sticker),

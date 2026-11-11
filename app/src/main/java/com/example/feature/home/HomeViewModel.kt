@@ -2,6 +2,7 @@ package com.example.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.core.data.NetworkPriceBridgeRepository
 import com.example.core.data.PriceBridgeRepositoryProvider
 import com.example.core.data.PriceBridgeRepository
 import com.example.core.model.AppNotification
@@ -26,9 +27,12 @@ class HomeViewModel(
 ) : ViewModel() {
 
     private val selectedCategoryId = MutableStateFlow("all")
+    private val routeModeState = MutableStateFlow("walking")
     private val isOfflineState = MutableStateFlow(false)
     private val errorMessageState = MutableStateFlow<String?>(null)
     private val isLocationSheetOpenState = MutableStateFlow(false)
+    private var lastRoutedLat = 0.0
+    private var lastRoutedLon = 0.0
 
     private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -95,6 +99,12 @@ class HomeViewModel(
             is HomeUiEvent.OnDismissProximityAlert -> {
                 _uiState.update { it.copy(activeProximityStore = null, proximityDistanceMeters = null) }
             }
+            is HomeUiEvent.OnRouteModeChanged -> {
+                val normalized = if (event.mode == "driving") "driving" else "walking"
+                (repository as? NetworkPriceBridgeRepository)?.setRouteMode(normalized)
+                routeModeState.value = normalized
+                _uiState.update { it.copy(routeMode = normalized) }
+            }
             is HomeUiEvent.OnNotificationClicked -> {
                 viewModelScope.launch {
                     repository.markNotificationAsRead(event.notification.id)
@@ -135,11 +145,13 @@ class HomeViewModel(
                 repository.getLocation(),
                 repository.getSmartBasketSummary(),
                 repository.getCategories(),
-                selectedCategoryId.flatMapLatest { categoryId ->
+                combine(selectedCategoryId, routeModeState) { cat, _ -> cat }.flatMapLatest { categoryId ->
                     repository.getBestDeals(categoryId)
                 },
                 repository.getKarmaPrompt(),
-                repository.getNearbyStores(),
+                routeModeState.flatMapLatest {
+                    repository.getNearbyStores()
+                },
                 repository.getNotifications()
             ) { flows ->
                 val location = flows[0] as LocationInfo
@@ -171,7 +183,8 @@ class HomeViewModel(
                     isOfflineQueueSheetOpen = _uiState.value.isOfflineQueueSheetOpen,
                     isSyncingOffline = _uiState.value.isSyncingOffline,
                     notifications = notifs,
-                    isNotificationsSheetOpen = _uiState.value.isNotificationsSheetOpen
+                    isNotificationsSheetOpen = _uiState.value.isNotificationsSheetOpen,
+                    routeMode = routeModeState.value
                 )
             }.catch { exception ->
                 _uiState.update {
@@ -198,15 +211,35 @@ class HomeViewModel(
 
         val results = FloatArray(1)
         val updatedStores = currentStores.map { store ->
-            android.location.Location.distanceBetween(lat, lon, store.latitude, store.longitude, results)
-            val distKm = (results[0] / 1000.0).let { Math.round(it * 100.0) / 100.0 }
-            val formattedDist = if (results[0] < 1000f) {
-                "${results[0].toInt()}m away"
+            // Preserve exact street/footpath route distances from backend; only recalculate offline/fallback stores locally
+            if (store.isExactRoute) {
+                store
             } else {
-                String.format(java.util.Locale.US, "%.1f km away", distKm)
+                android.location.Location.distanceBetween(lat, lon, store.latitude, store.longitude, results)
+                val distKm = (results[0] / 1000.0).let { Math.round(it * 100.0) / 100.0 }
+                val mins = (distKm * 12).toInt().coerceAtLeast(1)
+                val formattedDist = if (results[0] < 1000f) {
+                    "${results[0].toInt()}m · ${mins}m walk"
+                } else {
+                    String.format(java.util.Locale.UK, "%.1f km · %dm walk", distKm, mins)
+                }
+                store.copy(distanceKm = distKm, distanceFormatted = formattedDist)
             }
-            store.copy(distanceKm = distKm, distanceFormatted = formattedDist)
         }.sortedBy { it.distanceKm }
+
+        // If user physically moved > 150m from last routed GPS origin, refresh server route matrix
+        if (lastRoutedLat != 0.0 && lastRoutedLon != 0.0) {
+            android.location.Location.distanceBetween(lastRoutedLat, lastRoutedLon, lat, lon, results)
+            if (results[0] > 150f) {
+                lastRoutedLat = lat
+                lastRoutedLon = lon
+                (repository as? NetworkPriceBridgeRepository)?.setCoordinates(lat, lon)
+                loadData()
+            }
+        } else {
+            lastRoutedLat = lat
+            lastRoutedLon = lon
+        }
 
         val nearest = updatedStores.firstOrNull()
         val proximityStore = if (nearest != null) {

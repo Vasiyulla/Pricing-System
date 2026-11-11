@@ -54,6 +54,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -72,6 +73,13 @@ class NetworkPriceBridgeRepository(
     // Live user coordinates (dynamically supplied by DeviceLocationManager GPS)
     private var currentLat: Double = 0.0
     private var currentLon: Double = 0.0
+    private var currentRouteMode: String = "walking"
+
+    fun setRouteMode(mode: String) {
+        currentRouteMode = if (mode == "driving") "driving" else "walking"
+    }
+
+    fun getRouteMode(): String = currentRouteMode
 
     fun setCoordinates(lat: Double, lon: Double, neighborhood: String? = null) {
         currentLat = lat
@@ -245,7 +253,8 @@ class NetworkPriceBridgeRepository(
             val netDeals = api.service.getBestDealsBatch(
                 lat = currentLat,
                 lon = currentLon,
-                category = if (categoryId == "all") null else categoryId
+                category = if (categoryId == "all") null else categoryId,
+                mode = currentRouteMode
             )
             if (netDeals.isNotEmpty()) {
                 val mapped = netDeals.map { deal ->
@@ -253,7 +262,11 @@ class NetworkPriceBridgeRepository(
                     val bestStorePrice = StorePrice(
                         storeId = deal.bestStoreId,
                         storeName = deal.bestStoreName,
-                        distanceFormatted = "${deal.bestStoreDistanceKm} km",
+                        distanceFormatted = formatRouteDistance(
+                            km = deal.bestStoreDistanceKm,
+                            durationMinutes = deal.bestStoreDurationMinutes,
+                            routeMode = deal.bestStoreRouteMode ?: currentRouteMode
+                        ),
                         price = deal.bestPricePence / 100.0,
                         mrp = deal.bestPricePence / 100.0,
                         currencySymbol = "£",
@@ -268,15 +281,22 @@ class NetworkPriceBridgeRepository(
                         alternatives = alternatives
                     )
                 }
-                // Persist live products to Room database cache
+                // Persist live products to Room database cache (replacing stale deals from other locations)
                 try {
+                    database?.cachedDealDao()?.clearDeals()
                     database?.cachedDealDao()?.insertDeals(mapped.map { CachedDealEntity.fromProduct(it) })
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                 }
                 mapped
             } else {
-                null
+                // Backend succeeded with 0 deals for this radius/category: clear stale deals from prior location
+                try {
+                    database?.cachedDealDao()?.clearDeals()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                }
+                emptyList()
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
@@ -399,7 +419,7 @@ class NetworkPriceBridgeRepository(
     override fun getProductById(productId: String): Flow<Product?> = flow {
         val result: Product? = try {
             val netProd = api.service.getProductById(productId)
-            val comps = api.service.compareProductPrices(productId, currentLat, currentLon)
+            val comps = api.service.compareProductPrices(productId, currentLat, currentLon, currentRouteMode)
             val storePrices = comps.map { it.toStorePrice() }
             val best = storePrices.minByOrNull { it.price }
             val product = netProd.toProduct(bestPrice = best, comparedCount = comps.size, alternatives = storePrices)
@@ -434,7 +454,7 @@ class NetworkPriceBridgeRepository(
 
     override fun getStorePricesForProduct(productId: String): Flow<List<StorePrice>> = flow {
         val result: List<StorePrice> = try {
-            val comps = api.service.compareProductPrices(productId, currentLat, currentLon)
+            val comps = api.service.compareProductPrices(productId, currentLat, currentLon, currentRouteMode)
             comps.map { it.toStorePrice() }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
@@ -488,12 +508,15 @@ class NetworkPriceBridgeRepository(
 
     override fun getNearbyStores(): Flow<List<Store>> = flow {
         val result: List<Store> = try {
-            val netStores = api.service.getNearbyStores(lat = currentLat, lon = currentLon, radiusKm = 10.0)
+            val netStores = api.service.getNearbyStores(lat = currentLat, lon = currentLon, radiusKm = 10.0, mode = currentRouteMode)
             val stores = netStores.map { it.toStore() }
             try {
-                database?.cachedStoreDao()?.insertStores(
-                    stores.map { CachedStoreEntity.fromStore(it) }
-                )
+                database?.cachedStoreDao()?.clearAll()
+                if (stores.isNotEmpty()) {
+                    database?.cachedStoreDao()?.insertStores(
+                        stores.map { CachedStoreEntity.fromStore(it) }
+                    )
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
             }
@@ -1110,9 +1133,19 @@ class NetworkPriceBridgeRepository(
     }
 
     override suspend fun updateLocation(location: LocationInfo) {
+        val movedSignificantly = kotlin.math.abs(location.latitude - currentLat) > 0.02 ||
+            kotlin.math.abs(location.longitude - currentLon) > 0.02
         currentLocation.value = location
         currentLat = location.latitude
         currentLon = location.longitude
+        if (movedSignificantly) {
+            withContext(Dispatchers.IO) {
+                try {
+                    database?.cachedDealDao()?.clearDeals()
+                    database?.cachedStoreDao()?.clearAll()
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     override suspend fun dismissKarmaPrompt(promptId: String) {
@@ -1208,14 +1241,29 @@ class NetworkPriceBridgeRepository(
 
     // ── Mapper Extensions ──
 
-    private fun NetworkStorePriceComparison.toStorePrice(): StorePrice {
-        val dist = if (this.store.distanceKm != null) {
-            val km = this.store.distanceKm
-            val mins = (km * 12).toInt().coerceAtLeast(1)
-            if (km < 1.0) "${(km * 1000).toInt()}m · ${mins}m walk" else "%.1f km · ${mins}m walk".format(km)
+    private fun formatRouteDistance(
+        km: Double?,
+        durationMinutes: Int?,
+        routeMode: String?
+    ): String {
+        if (km == null) return "Nearby"
+        val isDrive = routeMode == "driving"
+        val mins = durationMinutes?.takeIf { it > 0 }
+            ?: if (isDrive) (km * 2.5).toInt().coerceAtLeast(1) else (km * 12).toInt().coerceAtLeast(1)
+        val unitLabel = if (isDrive) "drive" else "walk"
+        return if (km < 1.0) {
+            "${(km * 1000).toInt()}m · ${mins}m $unitLabel"
         } else {
-            "Nearby"
+            String.format(Locale.UK, "%.1f km · %dm %s", km, mins, unitLabel)
         }
+    }
+
+    private fun NetworkStorePriceComparison.toStorePrice(): StorePrice {
+        val dist = formatRouteDistance(
+            km = this.store.distanceKm,
+            durationMinutes = this.store.durationMinutes,
+            routeMode = this.store.routeMode
+        )
         return StorePrice(
             storeId = this.store.id,
             storeName = this.store.name,
@@ -1238,13 +1286,11 @@ class NetworkPriceBridgeRepository(
     }
 
     private fun NetworkStore.toStore(): Store {
-        val dist = if (this.distanceKm != null) {
-            val km = this.distanceKm
-            val mins = (km * 12).toInt().coerceAtLeast(1)
-            if (km < 1.0) "${(km * 1000).toInt()}m · ${mins}m walk" else "%.1f km · ${mins}m walk".format(km)
-        } else {
-            "Nearby"
-        }
+        val dist = formatRouteDistance(
+            km = this.distanceKm,
+            durationMinutes = this.durationMinutes,
+            routeMode = this.routeMode
+        )
         return Store(
             id = this.id,
             name = this.name,
@@ -1253,6 +1299,9 @@ class NetworkPriceBridgeRepository(
             latitude = this.latitude,
             longitude = this.longitude,
             distanceKm = this.distanceKm ?: 1.0,
+            durationMinutes = this.durationMinutes,
+            routeMode = this.routeMode ?: "walking",
+            isExactRoute = this.isExactRoute,
             isOpen = true,
             operatingHours = "7:00 AM - 11:00 PM",
             phone = null,

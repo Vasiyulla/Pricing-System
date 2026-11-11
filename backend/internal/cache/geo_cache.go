@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -34,7 +35,7 @@ func (c *GeoSpatialCache) IndexStores(ctx context.Context, stores []domain.Store
 	pipe := c.rdb.Pipeline()
 
 	for _, s := range stores {
-		if s.Latitude == 0 && s.Longitude == 0 {
+		if (s.Latitude == 0 && s.Longitude == 0) || strings.HasPrefix(s.ID, "store_live_") {
 			continue
 		}
 		geoLocs = append(geoLocs, &redis.GeoLocation{
@@ -90,6 +91,9 @@ func (c *GeoSpatialCache) SearchNearby(ctx context.Context, lat, lon, radiusKm f
 
 	stores := make([]domain.Store, 0, len(locations))
 	for _, loc := range locations {
+		if strings.HasPrefix(loc.Name, "store_live_") {
+			continue
+		}
 		cmd, ok := cmds[loc.Name]
 		if !ok {
 			continue
@@ -106,4 +110,35 @@ func (c *GeoSpatialCache) SearchNearby(ctx context.Context, lat, lon, radiusKm f
 	}
 
 	return stores, nil
+}
+
+// PurgeSyntheticStores removes previously auto-seeded store_live_* entries from Redis geo and metadata caches.
+func (c *GeoSpatialCache) PurgeSyntheticStores(ctx context.Context) error {
+	if c.rdb == nil {
+		return nil
+	}
+	var cursor uint64
+	for {
+		keys, next, err := c.rdb.ZScan(ctx, GeoStoresKey, cursor, "store_live_*", 200).Result()
+		if err != nil {
+			return err
+		}
+		if len(keys) > 0 {
+			members := make([]interface{}, 0, len(keys)/2)
+			pipe := c.rdb.Pipeline()
+			for i := 0; i < len(keys); i += 2 {
+				members = append(members, keys[i])
+				pipe.Del(ctx, StorePrefix+keys[i])
+			}
+			if len(members) > 0 {
+				pipe.ZRem(ctx, GeoStoresKey, members...)
+			}
+			_, _ = pipe.Exec(ctx)
+		}
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
+	return nil
 }

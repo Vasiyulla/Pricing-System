@@ -12,12 +12,18 @@ import (
 type OptimizerService struct {
 	storeRepo repository.StoreRepository
 	priceRepo repository.PriceRepository
+	routeSvc  *RouteService
 }
 
-func NewOptimizerService(storeRepo repository.StoreRepository, priceRepo repository.PriceRepository) *OptimizerService {
+func NewOptimizerService(storeRepo repository.StoreRepository, priceRepo repository.PriceRepository, routeSvc ...*RouteService) *OptimizerService {
+	var rs *RouteService
+	if len(routeSvc) > 0 {
+		rs = routeSvc[0]
+	}
 	return &OptimizerService{
 		storeRepo: storeRepo,
 		priceRepo: priceRepo,
+		routeSvc:  rs,
 	}
 }
 
@@ -81,9 +87,22 @@ func (s *OptimizerService) OptimizeTwoStopBasket(ctx context.Context, items []do
 			s1 := stores[i]
 			s2 := stores[j]
 
-			walkingDistKm := repository.HaversineDistanceKm(s1.Latitude, s1.Longitude, s2.Latitude, s2.Longitude)
-			if walkingDistKm > 1.5 { // Max 1.5km walk between stops
+			straightKm := repository.HaversineDistanceKm(s1.Latitude, s1.Longitude, s2.Latitude, s2.Longitude)
+			if straightKm > 1.5 { // Quick straight-line pre-filter before street routing
 				continue
+			}
+
+			var walkingMeters, extraMins int
+			if s.routeSvc != nil {
+				pairRoute := s.routeSvc.GetPairRoute(ctx, "walking", s1, s2)
+				walkingMeters = pairRoute.DistanceMeters
+				extraMins = max(1, int(math.Ceil(float64(pairRoute.DurationSeconds)/60.0)))
+				if walkingMeters > 2100 { // Max 2.1km real street walk between stops
+					continue
+				}
+			} else {
+				walkingMeters = int(straightKm * 1000)
+				extraMins = int(math.Ceil(float64(walkingMeters) / 80.0))
 			}
 
 			s1Items := []domain.BasketItem{}
@@ -120,8 +139,6 @@ func (s *OptimizerService) OptimizeTwoStopBasket(ctx context.Context, items []do
 			// We want substantial savings (£1.00+) and both stores utilized
 			if savings > bestPairSavings && len(s1Items) > 0 && len(s2Items) > 0 {
 				bestPairSavings = savings
-				walkingMeters := int(walkingDistKm * 1000)
-				extraMins := int(math.Ceil(float64(walkingMeters) / 80.0)) // ~80m/min walk speed
 
 				result = domain.TwoStopBasketResult{
 					Store1:                s1,

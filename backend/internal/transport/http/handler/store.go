@@ -30,6 +30,7 @@ type StoreHandler struct {
 	stickerRepo repository.YellowStickerRepository
 	verifierSvc service.StoreVerifier
 	geoCache    *cache.GeoSpatialCache
+	routeSvc    *service.RouteService
 	bgWG        *sync.WaitGroup
 }
 
@@ -41,6 +42,7 @@ func NewStoreHandler(
 	stickerRepo repository.YellowStickerRepository,
 	verifierSvc service.StoreVerifier,
 	geoCache *cache.GeoSpatialCache,
+	routeSvc *service.RouteService,
 	bgWG *sync.WaitGroup,
 ) *StoreHandler {
 	return &StoreHandler{
@@ -51,6 +53,7 @@ func NewStoreHandler(
 		stickerRepo: stickerRepo,
 		verifierSvc: verifierSvc,
 		geoCache:    geoCache,
+		routeSvc:    routeSvc,
 		bgWG:        bgWG,
 	}
 }
@@ -68,9 +71,13 @@ func (h *StoreHandler) GetNearby(w http.ResponseWriter, r *http.Request) {
 	if err != nil || radiusKm <= 0 {
 		radiusKm = 10.0
 	}
+	mode := service.NormalizeRouteMode(r.URL.Query().Get("mode"))
 
 	if h.geoCache != nil && lat != 0 && lon != 0 {
 		if cachedStores, err := h.geoCache.SearchNearby(r.Context(), lat, lon, radiusKm); err == nil && len(cachedStores) > 0 {
+			if h.routeSvc != nil {
+				cachedStores = h.routeSvc.EnrichStoreRoutes(r.Context(), lat, lon, mode, cachedStores)
+			}
 			respond.JSON(w, http.StatusOK, cachedStores)
 			return
 		}
@@ -81,13 +88,8 @@ func (h *StoreHandler) GetNearby(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	if len(stores) == 0 && lat != 0 && lon != 0 {
-		areaName := fmt.Sprintf("Local (%.2f, %.2f)", lat, lon)
-		seeded, seedErr := h.SeedAroundCoordinates(r.Context(), lat, lon, areaName)
-		if seedErr == nil && len(seeded) > 0 {
-			stores = seeded
-		}
+	if stores == nil {
+		stores = []domain.Store{}
 	}
 
 	// Tracked background Redis geo indexing instead of an unguarded fire-and-forget goroutine
@@ -101,6 +103,10 @@ func (h *StoreHandler) GetNearby(w http.ResponseWriter, r *http.Request) {
 			defer cancel()
 			_ = h.geoCache.IndexStores(ctx, storesCopy)
 		}()
+	}
+
+	if h.routeSvc != nil && len(stores) > 0 {
+		stores = h.routeSvc.EnrichStoreRoutes(r.Context(), lat, lon, mode, stores)
 	}
 
 	respond.JSON(w, http.StatusOK, stores)

@@ -16,7 +16,8 @@ interface PriceBridgeApiService {
     suspend fun getNearbyStores(
         @Query("lat") lat: Double,
         @Query("lon") lon: Double,
-        @Query("radius_km") radiusKm: Double = 10.0
+        @Query("radius_km") radiusKm: Double = 10.0,
+        @Query("mode") mode: String = "walking"
     ): List<NetworkStore>
 
     @GET("api/v1/stores/{id}")
@@ -38,7 +39,8 @@ interface PriceBridgeApiService {
     suspend fun compareProductPrices(
         @Path("id") productId: String,
         @Query("lat") lat: Double,
-        @Query("lon") lon: Double
+        @Query("lon") lon: Double,
+        @Query("mode") mode: String = "walking"
     ): List<NetworkStorePriceComparison>
 
     @GET("api/v1/products/{id}/trolley-whisper")
@@ -90,11 +92,15 @@ interface PriceBridgeApiService {
     @POST("api/v1/ai/yellow-sticker-scan")
     suspend fun scanYellowStickerAI(@Body payload: Map<String, String>): NetworkYellowStickerDeal
 
+    @POST("api/v1/ai/shelf-tag-scan")
+    suspend fun scanShelfTagAI(@Body payload: Map<String, String>): NetworkExtractedShelfTag
+
     @GET("api/v1/products/deals")
     suspend fun getBestDealsBatch(
         @Query("lat") lat: Double,
         @Query("lon") lon: Double,
-        @Query("category") category: String? = null
+        @Query("category") category: String? = null,
+        @Query("mode") mode: String = "walking"
     ): List<NetworkProductDealSummary>
 
     @POST("api/v1/auth/google")

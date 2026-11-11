@@ -70,6 +70,7 @@ import com.example.core.network.ApiClient
 import com.example.core.network.NetworkProduct
 import com.example.core.network.NetworkStorePriceComparison
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -171,10 +172,14 @@ fun ShoppingIntentHero(
                     val storeSchemes = mutableMapOf<String, String>()
                     val storeCounts = mutableMapOf<String, Int>()
 
+                    val activeLoc = runCatching { PriceBridgeRepositoryProvider.repository.getLocation().firstOrNull() }.getOrNull()
+                    val activeLat = activeLoc?.latitude?.takeIf { it != 0.0 } ?: 51.5390
+                    val activeLon = activeLoc?.longitude?.takeIf { it != 0.0 } ?: -0.1426
+
                     for (term in pack.items) {
                         val prods = ApiClient.service.searchProducts(term)
                         val prod = prods.firstOrNull() ?: continue
-                        val comps = ApiClient.service.compareProductPrices(prod.id, 51.5390, -0.1426)
+                        val comps = ApiClient.service.compareProductPrices(prod.id, activeLat, activeLon)
                         for (comp in comps) {
                             val dist = if (comp.store.distanceKm != null) {
                                 val km = comp.store.distanceKm
@@ -205,11 +210,7 @@ fun ShoppingIntentHero(
                         )
                     }.sortedBy { it.totalPence }
                 }
-                comparisonResults = if (estimates.isNotEmpty()) {
-                    estimates
-                } else {
-                    getFallbackTripEstimates(pack.id)
-                }
+                comparisonResults = estimates
             } catch (_: Exception) {
                 comparisonResults = getFallbackTripEstimates(pack.id)
             } finally {
@@ -231,10 +232,13 @@ fun ShoppingIntentHero(
         scope.launch {
             try {
                 val estimates = withContext(Dispatchers.IO) {
+                    val activeLoc = runCatching { PriceBridgeRepositoryProvider.repository.getLocation().firstOrNull() }.getOrNull()
+                    val activeLat = activeLoc?.latitude?.takeIf { it != 0.0 } ?: 51.5390
+                    val activeLon = activeLoc?.longitude?.takeIf { it != 0.0 } ?: -0.1426
                     val prods = ApiClient.service.searchProducts(query)
                     val prod = prods.firstOrNull()
                     if (prod != null) {
-                        val comps = ApiClient.service.compareProductPrices(prod.id, 51.5390, -0.1426)
+                        val comps = ApiClient.service.compareProductPrices(prod.id, activeLat, activeLon)
                         comps.map { comp ->
                             val dist = if (comp.store.distanceKm != null) {
                                 val km = comp.store.distanceKm

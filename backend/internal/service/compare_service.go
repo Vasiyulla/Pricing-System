@@ -26,6 +26,7 @@ type CompareService struct {
 	storeRepo    repository.StoreRepository
 	priceRepo    repository.PriceRepository
 	rdb          *redis.Client
+	routeSvc     *RouteService
 	requestGroup singleflight.Group
 	cacheMu      sync.RWMutex
 	cache        map[string]spatialCacheEntry
@@ -42,6 +43,11 @@ func NewCompareService(storeRepo repository.StoreRepository, priceRepo repositor
 		rdb:       redisClient,
 		cache:     make(map[string]spatialCacheEntry),
 	}
+}
+
+// SetRouteService attaches a RouteService for real street/footpath distance enrichment.
+func (s *CompareService) SetRouteService(routeSvc *RouteService) {
+	s.routeSvc = routeSvc
 }
 
 // SetRedis updates or initializes the Redis client instance
@@ -96,11 +102,15 @@ func (s *CompareService) InvalidateProductCache(ctx context.Context, productID, 
 
 // CompareProductAcrossStores fetches and ranks prices across nearby stores for a product,
 // protected by spatial geohash caching and singleflight request coalescing to prevent thundering herd.
-func (s *CompareService) CompareProductAcrossStores(ctx context.Context, productID string, userLat, userLon, radiusKm float64, userLoyaltySchemes map[domain.LoyaltyScheme]bool) ([]domain.StorePriceComparison, error) {
+func (s *CompareService) CompareProductAcrossStores(ctx context.Context, productID string, userLat, userLon, radiusKm float64, userLoyaltySchemes map[domain.LoyaltyScheme]bool, routeMode ...string) ([]domain.StorePriceComparison, error) {
+	mode := "walking"
+	if len(routeMode) > 0 {
+		mode = NormalizeRouteMode(routeMode[0])
+	}
 	// Quantize coordinates to ~1.1km grid cells (2 decimal places) for spatial cache sharing
 	quantLat := math.Round(userLat*100) / 100
 	quantLon := math.Round(userLon*100) / 100
-	cacheKey := fmt.Sprintf("geo:%.2f:%.2f:prod:%s:r:%.1f", quantLat, quantLon, productID, radiusKm)
+	cacheKey := fmt.Sprintf("geo:%.2f:%.2f:prod:%s:r:%.1f:m:%s", quantLat, quantLon, productID, radiusKm, mode)
 
 	// 1. Fast path: check distributed Redis cache first
 	if s.rdb != nil {
@@ -134,7 +144,7 @@ func (s *CompareService) CompareProductAcrossStores(ctx context.Context, product
 			}
 		}
 
-		comps, err := s.computeComparison(ctx, productID, userLat, userLon, radiusKm, userLoyaltySchemes)
+		comps, err := s.computeComparison(ctx, productID, userLat, userLon, radiusKm, userLoyaltySchemes, mode)
 		if err != nil {
 			return nil, err
 		}
@@ -163,10 +173,13 @@ func (s *CompareService) CompareProductAcrossStores(ctx context.Context, product
 	return res.([]domain.StorePriceComparison), nil
 }
 
-func (s *CompareService) computeComparison(ctx context.Context, productID string, userLat, userLon, radiusKm float64, userLoyaltySchemes map[domain.LoyaltyScheme]bool) ([]domain.StorePriceComparison, error) {
+func (s *CompareService) computeComparison(ctx context.Context, productID string, userLat, userLon, radiusKm float64, userLoyaltySchemes map[domain.LoyaltyScheme]bool, mode string) ([]domain.StorePriceComparison, error) {
 	nearbyStores, err := s.storeRepo.GetNearby(ctx, userLat, userLon, radiusKm)
 	if err != nil {
 		return nil, err
+	}
+	if s.routeSvc != nil && len(nearbyStores) > 0 {
+		nearbyStores = s.routeSvc.EnrichStoreRoutes(ctx, userLat, userLon, mode, nearbyStores)
 	}
 
 	prices, err := s.priceRepo.GetStorePrices(ctx, productID)

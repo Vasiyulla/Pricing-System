@@ -174,7 +174,7 @@ fun BasketContent(
                         )
                         uiState.basket?.let { basket ->
                             Text(
-                                text = "Optimized across Indiranagar stores",
+                                text = "Optimized across nearby UK stores",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1244,7 +1244,7 @@ private fun AddItemBottomSheet(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text(stringResource(R.string.input_item_name)) },
-                placeholder = { Text("e.g. Aashirvaad Shudh Chakki Atta") },
+                placeholder = { Text("e.g. Warburtons Toastie White 800g") },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 trailingIcon = {
@@ -1457,47 +1457,47 @@ private val previewBasket = ShoppingBasket(
     items = listOf(
         ShoppingListItem(
             id = "1",
-            productName = "Fortune Sunlite Sunflower Oil",
+            productName = "Warburtons Toastie White",
             quantity = 1,
-            packageSize = "1L Pouch",
+            packageSize = "800g",
             isChecked = false,
-            bestStoreName = "Nilgiris Supermarket",
-            bestStorePrice = 142.0,
+            bestStoreName = "Aldi Camden High St",
+            bestStorePrice = 1.35,
             lastObservedRelativeTime = "2h ago",
             statusBadge = PriceStatusBadgeType.CommunityCorroborated
         ),
         ShoppingListItem(
             id = "2",
-            productName = "Amul Taaza Milk",
+            productName = "British Whole Milk 4 Pints",
             quantity = 2,
-            packageSize = "1L Tetra Pack",
+            packageSize = "2.27L",
             isChecked = true,
-            bestStoreName = "Apna Bazar Kirana",
-            bestStorePrice = 72.0,
+            bestStoreName = "Tesco Express Camden",
+            bestStorePrice = 1.65,
             lastObservedRelativeTime = "3h ago",
             statusBadge = PriceStatusBadgeType.CommunityCorroborated
         )
     ),
-    singleStoreEstimatedTotal = 360.0,
-    optimizedEstimatedTotal = 286.0,
-    estimatedSavingsAmount = 74.0,
+    singleStoreEstimatedTotal = 5.10,
+    optimizedEstimatedTotal = 4.65,
+    estimatedSavingsAmount = 0.45,
     storeSplits = listOf(
-        StoreSplitSummary("Nilgiris Supermarket", 1, 142.0),
-        StoreSplitSummary("Apna Bazar Kirana", 2, 144.0)
+        StoreSplitSummary("Aldi Camden High St", 1, 1.35),
+        StoreSplitSummary("Tesco Express Camden", 2, 3.30)
     ),
     oneStoreRecommendation = StoreRecommendation(
         title = "Fastest: 1-Store Run",
         isTwoStoreSplit = false,
-        primaryStoreName = "Nilgiris Supermarket",
-        primaryStoreDistance = "0.6 km",
+        primaryStoreName = "Tesco Express Camden",
+        primaryStoreDistance = "0.3 km",
         primaryItemCount = 2,
-        totalEstimatedCost = 360.0,
+        totalEstimatedCost = 5.10,
         badgeLabel = "Fastest • Single Stop"
     ),
     twoStoreRecommendation = StoreRecommendation(
         title = "Max Savings: 2-Store Split",
         isTwoStoreSplit = true,
-        primaryStoreName = "Apna Bazar",
+        primaryStoreName = "Aldi Camden High St",
         primaryStoreDistance = "0.3 km",
         primaryItemCount = 1,
         secondaryStoreName = "Nilgiris",

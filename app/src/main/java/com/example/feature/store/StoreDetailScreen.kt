@@ -747,7 +747,7 @@ private fun MerchantClaimSheetContent(
             value = merchantName,
             onValueChange = { merchantName = it },
             label = { Text("Manager / Owner Name") },
-            placeholder = { Text("e.g. Ramesh Kumar") },
+            placeholder = { Text("e.g. Oliver Smith") },
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth()
         )
@@ -758,7 +758,7 @@ private fun MerchantClaimSheetContent(
             value = phone,
             onValueChange = { phone = it },
             label = { Text("Registered Business Phone") },
-            placeholder = { Text("+91 98450 XXXXX") },
+            placeholder = { Text("+44 20 7946 0123") },
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth()
         )

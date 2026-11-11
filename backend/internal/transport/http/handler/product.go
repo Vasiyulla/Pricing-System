@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,6 +23,7 @@ type ProductHandler struct {
 	compareSvc   *service.CompareService
 	trolleySvc   *service.TrolleyService
 	storeHandler *StoreHandler
+	routeSvc     *service.RouteService
 }
 
 func NewProductHandler(
@@ -33,7 +33,12 @@ func NewProductHandler(
 	compareSvc *service.CompareService,
 	trolleySvc *service.TrolleyService,
 	storeHandler *StoreHandler,
+	routeSvc ...*service.RouteService,
 ) *ProductHandler {
+	var rs *service.RouteService
+	if len(routeSvc) > 0 {
+		rs = routeSvc[0]
+	}
 	return &ProductHandler{
 		productRepo:  productRepo,
 		priceRepo:    priceRepo,
@@ -41,6 +46,7 @@ func NewProductHandler(
 		compareSvc:   compareSvc,
 		trolleySvc:   trolleySvc,
 		storeHandler: storeHandler,
+		routeSvc:     rs,
 	}
 }
 
@@ -139,16 +145,52 @@ func (h *ProductHandler) GetBestDealsBatch(w http.ResponseWriter, r *http.Reques
 		lon = -0.1426
 	}
 
-	if nearby, _ := h.storeRepo.GetNearby(r.Context(), lat, lon, 10.0); len(nearby) == 0 && h.storeHandler != nil {
-		areaName := fmt.Sprintf("Local (%.2f, %.2f)", lat, lon)
-		_, _ = h.storeHandler.SeedAroundCoordinates(r.Context(), lat, lon, areaName)
-	}
-
+	mode := service.NormalizeRouteMode(r.URL.Query().Get("mode"))
 	summaries, err := h.priceRepo.GetBestDealsSingleQuery(r.Context(), lat, lon, 10.0, category)
 	if err != nil {
 		respond.Error(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if summaries == nil {
+		summaries = []domain.ProductDealSummary{}
+	}
+
+	if h.routeSvc != nil && len(summaries) > 0 {
+		// Enrich unique referenced stores in a single matrix batch call
+		uniqueMap := make(map[string]domain.Store)
+		for _, s := range summaries {
+			for _, alt := range s.Alternatives {
+				if _, seen := uniqueMap[alt.Store.ID]; !seen {
+					uniqueMap[alt.Store.ID] = alt.Store
+				}
+			}
+		}
+		if len(uniqueMap) > 0 {
+			uniqueStores := make([]domain.Store, 0, len(uniqueMap))
+			for _, st := range uniqueMap {
+				uniqueStores = append(uniqueStores, st)
+			}
+			enriched := h.routeSvc.EnrichStoreRoutes(r.Context(), lat, lon, mode, uniqueStores)
+			enrichedMap := make(map[string]domain.Store, len(enriched))
+			for _, st := range enriched {
+				enrichedMap[st.ID] = st
+			}
+			for i := range summaries {
+				for j := range summaries[i].Alternatives {
+					if st, ok := enrichedMap[summaries[i].Alternatives[j].Store.ID]; ok {
+						summaries[i].Alternatives[j].Store = st
+					}
+				}
+				if bestSt, ok := enrichedMap[summaries[i].BestStoreID]; ok {
+					summaries[i].BestStoreDistanceKm = bestSt.DistanceKm
+					summaries[i].BestStoreDurationMins = bestSt.DurationMinutes
+					summaries[i].BestStoreRouteMode = bestSt.RouteMode
+					summaries[i].IsExactRoute = bestSt.IsExactRoute
+				}
+			}
+		}
+	}
+
 	respond.JSON(w, http.StatusOK, summaries)
 }
 
@@ -160,6 +202,7 @@ func (h *ProductHandler) Compare(w http.ResponseWriter, r *http.Request) {
 		lat = 51.5390
 		lon = -0.1426
 	}
+	mode := service.NormalizeRouteMode(r.URL.Query().Get("mode"))
 
 	userLoyalty := map[domain.LoyaltyScheme]bool{
 		domain.LoyaltyClubcard: true,
@@ -167,7 +210,7 @@ func (h *ProductHandler) Compare(w http.ResponseWriter, r *http.Request) {
 		domain.LoyaltyLidlPlus: true,
 	}
 
-	comparisons, err := h.compareSvc.CompareProductAcrossStores(r.Context(), productID, lat, lon, 10.0, userLoyalty)
+	comparisons, err := h.compareSvc.CompareProductAcrossStores(r.Context(), productID, lat, lon, 10.0, userLoyalty, mode)
 	if err != nil {
 		respond.Error(w, r, http.StatusInternalServerError, err.Error())
 		return

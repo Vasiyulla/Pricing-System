@@ -17,9 +17,12 @@ data class Store(
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
     val distanceKm: Double = 1.0,
+    val durationMinutes: Int? = null,
+    val routeMode: String = "walking",
+    val isExactRoute: Boolean = false,
     val isOpen: Boolean = true,
     val operatingHours: String = "8:00 AM - 10:00 PM",
-    val phone: String? = "+91 80 2520 1122",
+    val phone: String? = "+44 20 7946 0000",
     val reliabilityScore: Int = 96, // 0 - 100
     val isStoreConfirmedPartner: Boolean = false,
     val claimStatus: StoreClaimStatus = StoreClaimStatus.UNCLAIMED,
@@ -27,5 +30,5 @@ data class Store(
     val verifiedPricesCount: Int = 42,
     val recentDiscrepancyCount: Int = 0,
     val activeWarningNotice: String? = null,
-    val categoryTags: List<String> = listOf("Kirana", "Groceries", "Dairy")
+    val categoryTags: List<String> = listOf("Supermarket", "Groceries", "Dairy")
 )

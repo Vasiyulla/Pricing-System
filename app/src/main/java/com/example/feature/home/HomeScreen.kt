@@ -231,12 +231,6 @@ fun HomeContent(
                         modifier = Modifier.weight(1f)
                     )
                 }
-                uiState.isEmpty -> {
-                    EmptyStateView(
-                        onActionClick = { onEvent(HomeUiEvent.OnScanClicked) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
                 else -> {
                     LazyColumn(
                         modifier = Modifier
@@ -447,10 +441,10 @@ fun HomeContent(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = "Nearby Stores & Kiranas",
+                                                text = "Nearby Stores",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface
@@ -466,10 +460,41 @@ fun HomeContent(
                                             )
                                         }
                                         Text(
-                                            text = "Verified local shops • Reliability scores",
+                                            text = if (uiState.routeMode == "driving") {
+                                                "Road driving routes • Reliability scores"
+                                            } else {
+                                                "Footpath walking routes • Reliability scores"
+                                            },
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                    }
+
+                                    Row(
+                                        modifier = Modifier
+                                            .background(
+                                                MaterialTheme.colorScheme.surfaceContainer,
+                                                RoundedCornerShape(20.dp)
+                                            )
+                                            .padding(3.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        listOf("walking" to "Walk", "driving" to "Drive").forEach { (modeKey, label) ->
+                                            val selected = uiState.routeMode == modeKey
+                                            Surface(
+                                                onClick = { onEvent(HomeUiEvent.OnRouteModeChanged(modeKey)) },
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                            ) {
+                                                Text(
+                                                    text = label,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -492,75 +517,103 @@ fun HomeContent(
                             }
                         }
 
-                        // Section 1 Header: Best Deals Near You
-                        item(key = "best_deals_header") {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = MaterialTheme.spacing.spaceMd),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = stringResource(R.string.section_best_deals_title),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface
+                        // Empty Area Coverage State (no tracked stores within 10 km)
+                        if (!uiState.isLoading && uiState.errorMessage == null && uiState.nearbyStores.isEmpty() && uiState.deals.isEmpty()) {
+                            item(key = "empty_area_coverage") {
+                                EmptyAreaCoverageCard(
+                                    neighborhood = uiState.location.neighborhood,
+                                    onExploreLondonPilot = {
+                                        val pilotLocation = LocationInfo(
+                                            title = "Camden Town (Pilot)",
+                                            neighborhood = "Camden Town, London NW1",
+                                            addressLine = "124-126 Camden High St, London NW1 0LU",
+                                            latitude = 51.5390,
+                                            longitude = -0.1426,
+                                            isLiveTrackingActive = false
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .size(8.dp)
-                                                .background(
-                                                    MaterialTheme.colorScheme.secondary,
-                                                    CircleShape
-                                                )
+                                        (PriceBridgeRepositoryProvider.repository as? NetworkPriceBridgeRepository)?.setCoordinates(
+                                            lat = pilotLocation.latitude,
+                                            lon = pilotLocation.longitude,
+                                            neighborhood = pilotLocation.neighborhood
                                         )
-                                    }
-                                    Text(
-                                        text = stringResource(
-                                            R.string.section_best_deals_subtitle,
-                                            uiState.location.neighborhood
-                                        ),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                TextButton(
-                                    onClick = { onEvent(HomeUiEvent.OnSearchClicked) },
-                                    modifier = Modifier.testTag("btn_view_all_deals")
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.btn_view_all),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                    Spacer(modifier = Modifier.width(2.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.ChevronRight,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
+                                        onEvent(HomeUiEvent.OnChangeLocation(pilotLocation))
+                                    },
+                                    onPickLocation = { onEvent(HomeUiEvent.OnLocationSelectorClicked) }
+                                )
                             }
                         }
 
-                        // Deals List Items
-                        items(
-                            items = uiState.deals,
-                            key = { it.id }
-                        ) { product ->
-                            Box(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
-                                ProductDealCard(
-                                    product = product,
-                                    onProductClick = { onEvent(HomeUiEvent.OnProductClicked(it)) },
-                                    onCompareStoresClick = { onEvent(HomeUiEvent.OnCompareStoresClicked(it)) }
-                                )
+                        // Section 1 Header: Best Deals Near You
+                        if (uiState.deals.isNotEmpty()) {
+                            item(key = "best_deals_header") {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = MaterialTheme.spacing.spaceMd),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = stringResource(R.string.section_best_deals_title),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .background(
+                                                        MaterialTheme.colorScheme.secondary,
+                                                        CircleShape
+                                                    )
+                                            )
+                                        }
+                                        Text(
+                                            text = stringResource(
+                                                R.string.section_best_deals_subtitle,
+                                                uiState.location.neighborhood
+                                            ),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    TextButton(
+                                        onClick = { onEvent(HomeUiEvent.OnSearchClicked) },
+                                        modifier = Modifier.testTag("btn_view_all_deals")
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.btn_view_all),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.ChevronRight,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Deals List Items
+                            items(
+                                items = uiState.deals,
+                                key = { it.id }
+                            ) { product ->
+                                Box(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.spaceMd)) {
+                                    ProductDealCard(
+                                        product = product,
+                                        onProductClick = { onEvent(HomeUiEvent.OnProductClicked(it)) },
+                                        onCompareStoresClick = { onEvent(HomeUiEvent.OnCompareStoresClicked(it)) }
+                                    )
+                                }
                             }
                         }
 
@@ -965,6 +1018,61 @@ private fun LocationSelectionSheetContent(
             }
         }
 
+        // "Camden Town, London (Pilot)" 1-Tap Preset Card
+        Surface(
+            onClick = {
+                val pilotLocation = LocationInfo(
+                    title = "Camden Town (Pilot)",
+                    neighborhood = "Camden Town, London NW1",
+                    addressLine = "124-126 Camden High St, London NW1 0LU",
+                    latitude = 51.5390,
+                    longitude = -0.1426,
+                    isLiveTrackingActive = false
+                )
+                (PriceBridgeRepositoryProvider.repository as? NetworkPriceBridgeRepository)?.setCoordinates(
+                    lat = pilotLocation.latitude,
+                    lon = pilotLocation.longitude,
+                    neighborhood = pilotLocation.neighborhood
+                )
+                onSelectLocation(pilotLocation)
+            },
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Storefront,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Camden Town, London (Pilot Data)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Explore 12 real London supermarkets & live £ prices",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
         // Saved Addresses Section (Home, Work, Other)
         if (savedAddresses.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1132,7 +1240,7 @@ private fun LocationSelectionSheetContent(
                         value = areaStreetText,
                         onValueChange = { areaStreetText = it },
                         label = { Text("Area / Street / Landmark") },
-                        placeholder = { Text("e.g. 12th Main Road, Indiranagar") },
+                        placeholder = { Text("e.g. 42 Camden High Street, London") },
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -1175,8 +1283,8 @@ private fun LocationSelectionSheetContent(
                                     label = selectedLabelType,
                                     addressLine = fullLine,
                                     locality = areaStreetText.trim(),
-                                    latitude = if (currentLocation.latitude != 0.0) currentLocation.latitude else 12.9716,
-                                    longitude = if (currentLocation.longitude != 0.0) currentLocation.longitude else 77.5946
+                                    latitude = if (currentLocation.latitude != 0.0) currentLocation.latitude else 51.5390,
+                                    longitude = if (currentLocation.longitude != 0.0) currentLocation.longitude else -0.1426
                                 )
                                 AppSessionManager.saveAddress(newAddr)
                                 savedAddresses = AppSessionManager.getSavedAddresses()
@@ -1211,6 +1319,85 @@ private fun LocationSelectionSheetContent(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Honest empty-coverage state when the user's current GPS has 0 tracked stores within 10 km.
+ */
+@Composable
+private fun EmptyAreaCoverageCard(
+    neighborhood: String,
+    onExploreLondonPilot: () -> Unit,
+    onPickLocation: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MaterialTheme.spacing.spaceMd)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Storefront,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "No tracked stores near ${neighborhood.ifBlank { "your area" }} yet",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Live pilot store prices are currently seeded in Camden Town, London (UK).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Button(
+                onClick = onExploreLondonPilot,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Explore Camden Town Pilot", fontWeight = FontWeight.Bold)
+            }
+
+            OutlinedButton(
+                onClick = onPickLocation,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Pick Different Location")
             }
         }
     }
