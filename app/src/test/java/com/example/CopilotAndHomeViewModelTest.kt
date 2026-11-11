@@ -27,8 +27,10 @@ import com.example.feature.home.HomeViewModel
 import com.example.feature.yellowsticker.YellowStickerItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -143,6 +145,24 @@ class CopilotAndHomeViewModelTest {
         assertTrue(vm.uiState.value.nearbyStores.isEmpty())
         assertTrue(vm.uiState.value.deals.isEmpty())
     }
+
+    @Test
+    fun homeViewModel_doesNotHangInLoadingWhenNetworkFlowsDelay() = runTest {
+        val repo = HangingNetworkFakeRepository()
+        val vm = HomeViewModel(repository = repo)
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isLoading)
+        assertEquals("Test City", vm.uiState.value.location.neighborhood)
+        assertTrue(vm.uiState.value.categories.isNotEmpty())
+    }
+}
+
+private class HangingNetworkFakeRepository : PriceBridgeRepository by TestFakeRepository() {
+    override fun getNearbyStores(): Flow<List<Store>> = flow { awaitCancellation() }
+    override fun getBestDeals(categoryId: String?): Flow<List<Product>> = flow { awaitCancellation() }
+    override fun getKarmaPrompt(): Flow<KarmaVerificationPrompt?> = flow { awaitCancellation() }
+    override fun getCategories(): Flow<List<Category>> = flow { awaitCancellation() }
 }
 
 private class TestFakeRepository(

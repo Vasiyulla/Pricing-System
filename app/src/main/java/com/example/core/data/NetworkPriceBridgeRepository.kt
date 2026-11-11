@@ -75,6 +75,14 @@ class NetworkPriceBridgeRepository(
     private var currentLon: Double = 0.0
     private var currentRouteMode: String = "walking"
 
+    // In-memory snapshot caches so returning to Home renders immediately before background refresh
+    @Volatile private var lastCategories: List<Category>? = null
+    @Volatile private var lastKarmaPrompt: KarmaVerificationPrompt? = null
+    @Volatile private var lastStoresKey: String? = null
+    @Volatile private var lastStores: List<Store>? = null
+    @Volatile private var lastDealsKey: String? = null
+    @Volatile private var lastDeals: List<Product>? = null
+
     fun setRouteMode(mode: String) {
         currentRouteMode = if (mode == "driving") "driving" else "walking"
     }
@@ -95,6 +103,10 @@ class NetworkPriceBridgeRepository(
             )
         }
         if (movedSignificantly) {
+            lastStoresKey = null
+            lastStores = null
+            lastDealsKey = null
+            lastDeals = null
             scope.launch {
                 try {
                     database?.cachedDealDao()?.clearDeals()
@@ -185,22 +197,26 @@ class NetworkPriceBridgeRepository(
     override fun getSmartBasketSummary(): Flow<SmartBasketSummary> = basketSummary.asStateFlow()
 
     override fun getCategories(): Flow<List<Category>> = flow {
-        // Step 1: Immediately emit cached categories from Room if available
+        // Step 1: Immediately emit Room/memory cache (or default "All") so Home never blocks on network
         val cached = try {
-            database?.cachedCategoryDao()?.getAllCategories()
+            database?.cachedCategoryDao()?.getAllCategories()?.map { it.toCategory() }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             null
         }
-        if (!cached.isNullOrEmpty()) {
-            emit(cached.map { it.toCategory() })
+        val initial = when {
+            !cached.isNullOrEmpty() -> cached
+            !lastCategories.isNullOrEmpty() -> lastCategories!!
+            else -> listOf(Category(id = "all", name = "All"))
         }
+        emit(initial)
 
         // Step 2: Fetch fresh categories from backend and update cache
         val netResult: List<Category>? = try {
             val netCats = api.service.getCategories()
             if (netCats.isNotEmpty()) {
                 val categories = netCats.map { Category(id = it.id, name = it.name) }
+                lastCategories = categories
                 try {
                     database?.cachedCategoryDao()?.insertCategories(
                         netCats.map { CachedCategoryEntity(id = it.id, name = it.name) }
@@ -209,21 +225,22 @@ class NetworkPriceBridgeRepository(
                     if (e is CancellationException) throw e
                 }
                 categories
-            } else if (cached.isNullOrEmpty()) {
-                listOf(Category(id = "all", name = "All"))
             } else {
                 null
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            if (cached.isNullOrEmpty()) listOf(Category(id = "all", name = "All")) else null
+            null
         }
-        if (netResult != null) {
+        if (netResult != null && netResult != initial) {
             emit(netResult)
         }
     }.flowOn(Dispatchers.IO)
 
     override fun getKarmaPrompt(): Flow<KarmaVerificationPrompt?> = flow {
+        // Emit immediately so Home combine() never stalls on optional bounty prompts
+        emit(lastKarmaPrompt)
+
         val result: KarmaVerificationPrompt? = try {
             val prompt = api.service.getActiveBountyPrompt()
             if (prompt != null && prompt.bountyId.isNotEmpty() && prompt.bountyId != dismissedPromptId.value) {
@@ -240,6 +257,7 @@ class NetworkPriceBridgeRepository(
             if (e is CancellationException) throw e
             null
         }
+        lastKarmaPrompt = result
         emit(result)
     }.flowOn(Dispatchers.IO)
 
@@ -249,8 +267,11 @@ class NetworkPriceBridgeRepository(
             return@flow
         }
 
-        // Step 1: Immediately emit from Room SQLite local cache (if any exists from previous sync)
-        val cached = try {
+        val dealsKey = "%.3f:%.3f:%s:%s".format(java.util.Locale.US, currentLat, currentLon, categoryId ?: "all", currentRouteMode)
+        val memCached = if (lastDealsKey == dealsKey) lastDeals else null
+
+        // Step 1: Always emit immediate local snapshot (memory or Room SQLite, or emptyList()) before network I/O
+        val cached = memCached ?: try {
             if (categoryId == null || categoryId == "all") {
                 database?.cachedDealDao()?.getAllDealsSync()?.map { it.toProduct() } ?: emptyList()
             } else {
@@ -260,9 +281,7 @@ class NetworkPriceBridgeRepository(
             if (e is CancellationException) throw e
             emptyList()
         }
-        if (cached.isNotEmpty()) {
-            emit(cached)
-        }
+        emit(cached)
 
         // Step 2: Fetch live single-query batch deals from backend
         val liveProducts: List<Product>? = try {
@@ -297,6 +316,8 @@ class NetworkPriceBridgeRepository(
                         alternatives = alternatives
                     )
                 }
+                lastDealsKey = dealsKey
+                lastDeals = mapped
                 // Persist live products to Room database cache (replacing stale deals from other locations)
                 try {
                     database?.cachedDealDao()?.clearDeals()
@@ -306,6 +327,8 @@ class NetworkPriceBridgeRepository(
                 }
                 mapped
             } else {
+                lastDealsKey = dealsKey
+                lastDeals = emptyList()
                 // Backend succeeded with 0 deals for this radius/category: clear stale deals from prior location
                 try {
                     database?.cachedDealDao()?.clearDeals()
@@ -554,9 +577,25 @@ class NetworkPriceBridgeRepository(
             emit(emptyList())
             return@flow
         }
-        val result: List<Store> = try {
+
+        val storesKey = "%.3f:%.3f:%s".format(java.util.Locale.US, currentLat, currentLon, currentRouteMode)
+        val initialCached = if (lastStoresKey == storesKey && lastStores != null) {
+            lastStores!!
+        } else {
+            try {
+                database?.cachedStoreDao()?.getAllStores()?.map { it.toStore() } ?: emptyList()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                emptyList()
+            }
+        }
+        emit(initialCached)
+
+        val liveResult: List<Store>? = try {
             val netStores = api.service.getNearbyStores(lat = currentLat, lon = currentLon, radiusKm = 10.0, mode = currentRouteMode)
             val stores = netStores.map { it.toStore() }
+            lastStoresKey = storesKey
+            lastStores = stores
             try {
                 database?.cachedStoreDao()?.clearAll()
                 if (stores.isNotEmpty()) {
@@ -570,15 +609,11 @@ class NetworkPriceBridgeRepository(
             stores
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            val cached = try {
-                database?.cachedStoreDao()?.getAllStores()
-            } catch (e2: Exception) {
-                if (e2 is CancellationException) throw e2
-                null
-            } ?: emptyList()
-            cached.map { it.toStore() }
+            null
         }
-        emit(result)
+        if (liveResult != null) {
+            emit(liveResult)
+        }
     }.flowOn(Dispatchers.IO)
 
     override fun getAllProducts(): Flow<List<Product>> = flow {
@@ -1230,6 +1265,10 @@ class NetworkPriceBridgeRepository(
         currentLat = location.latitude
         currentLon = location.longitude
         if (movedSignificantly) {
+            lastStoresKey = null
+            lastStores = null
+            lastDealsKey = null
+            lastDeals = null
             withContext(Dispatchers.IO) {
                 try {
                     database?.cachedDealDao()?.clearDeals()
@@ -1256,6 +1295,12 @@ class NetworkPriceBridgeRepository(
                 recentSearches.value = emptyList()
                 submissionHistory.value = emptyList()
                 myAddedProductsState.value = emptyList()
+                lastCategories = null
+                lastKarmaPrompt = null
+                lastStoresKey = null
+                lastStores = null
+                lastDealsKey = null
+                lastDeals = null
                 pendingOfflineCount.value = 0
                 queuedSubmissionsState.value = emptyList()
 

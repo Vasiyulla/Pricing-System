@@ -217,8 +217,16 @@ fun PriceBridgeNavHost(
 
 ) {
 
-    val isLoggedIn by AppSessionManager.isLoggedIn.collectAsStateWithLifecycle(initialValue = false)
-    val startDestination = if (isLoggedIn) Routes.HOME else Routes.AUTH
+    val startDestination = androidx.compose.runtime.remember {
+        if (AppSessionManager.isLoggedIn.value) Routes.HOME else Routes.AUTH
+    }
+    val navigateToHome: () -> Unit = {
+        if (!navController.popBackStack(Routes.HOME, inclusive = false)) {
+            navController.navigate(Routes.HOME) {
+                launchSingleTop = true
+            }
+        }
+    }
 
     NavHost(
 
@@ -344,17 +352,7 @@ fun PriceBridgeNavHost(
 
                 },
 
-                onNavigateToHome = {
-
-                    navController.navigate(Routes.HOME) {
-
-                        popUpTo(Routes.HOME) { inclusive = true }
-
-                        launchSingleTop = true
-
-                    }
-
-                },
+                onNavigateToHome = navigateToHome,
 
                 onNavigateToScan = {
 
@@ -398,17 +396,7 @@ fun PriceBridgeNavHost(
 
                 onNavigateBack = { navController.popBackStack() },
 
-                onNavigateToHome = {
-
-                    navController.navigate(Routes.HOME) {
-
-                        popUpTo(Routes.HOME) { inclusive = true }
-
-                        launchSingleTop = true
-
-                    }
-
-                },
+                onNavigateToHome = navigateToHome,
 
                 onNavigateToSearch = {
 
@@ -456,17 +444,7 @@ fun PriceBridgeNavHost(
 
             ProfileScreen(
 
-                onNavigateToHome = {
-
-                    navController.navigate(Routes.HOME) {
-
-                        popUpTo(Routes.HOME) { inclusive = true }
-
-                        launchSingleTop = true
-
-                    }
-
-                },
+                onNavigateToHome = navigateToHome,
 
                 onNavigateToSearch = {
 
@@ -534,17 +512,7 @@ fun PriceBridgeNavHost(
 
                 onNavigateBack = { navController.popBackStack() },
 
-                onNavigateToHome = {
-
-                    navController.navigate(Routes.HOME) {
-
-                        popUpTo(Routes.HOME) { inclusive = true }
-
-                        launchSingleTop = true
-
-                    }
-
-                },
+                onNavigateToHome = navigateToHome,
 
                 onNavigateToSearch = {
 

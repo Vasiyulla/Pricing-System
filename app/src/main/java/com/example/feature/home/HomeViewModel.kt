@@ -14,6 +14,7 @@ import com.example.core.model.ShoppingBasket
 import com.example.core.model.SmartBasketSummary
 import com.example.core.model.Store
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -37,6 +39,9 @@ class HomeViewModel(
     private val isAddItemSheetOpenState = MutableStateFlow(false)
     private var lastRoutedLat = 0.0
     private var lastRoutedLon = 0.0
+    private var loadDataJob: Job? = null
+    private var offlineCountJob: Job? = null
+    private var queuedSubmissionsJob: Job? = null
 
     private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -171,15 +176,21 @@ class HomeViewModel(
     }
 
     private fun loadData() {
-        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        val currentState = _uiState.value
+        val hasRenderableContent = currentState.categories.isNotEmpty() ||
+            currentState.shoppingBasket != null ||
+            currentState.location.latitude != 0.0 ||
+            currentState.location.longitude != 0.0
+        _uiState.update { it.copy(isLoading = !hasRenderableContent, errorMessage = null) }
 
-        // Observe offline queue count & queued items
-        viewModelScope.launch {
+        offlineCountJob?.cancel()
+        offlineCountJob = viewModelScope.launch {
             repository.getPendingOfflineSubmissionCount().collect { count ->
                 _uiState.update { it.copy(pendingOfflineCount = count) }
             }
         }
-        viewModelScope.launch {
+        queuedSubmissionsJob?.cancel()
+        queuedSubmissionsJob = viewModelScope.launch {
             repository.getQueuedSubmissions().collect { queued ->
                 _uiState.update { it.copy(queuedSubmissions = queued) }
             }
@@ -188,18 +199,27 @@ class HomeViewModel(
             .map { Pair(it.latitude, it.longitude) }
             .distinctUntilChanged()
 
+        loadDataJob?.cancel()
         @OptIn(ExperimentalCoroutinesApi::class)
-        viewModelScope.launch {
+        loadDataJob = viewModelScope.launch {
             combine(
                 repository.getLocation(),
                 repository.getSmartBasketSummary(),
-                repository.getCategories(),
+                repository.getCategories()
+                    .onStart { emit(listOf(Category(id = "all", name = "All"))) }
+                    .catch { emit(listOf(Category(id = "all", name = "All"))) },
                 combine(selectedCategoryId, routeModeState, locationKeyFlow) { cat, _, _ -> cat }.flatMapLatest { categoryId ->
                     repository.getBestDeals(categoryId)
+                        .onStart { emit(_uiState.value.deals) }
+                        .catch { emit(emptyList()) }
                 },
-                repository.getKarmaPrompt(),
+                repository.getKarmaPrompt()
+                    .onStart { emit(_uiState.value.karmaPrompt) }
+                    .catch { emit(null) },
                 combine(routeModeState, locationKeyFlow) { _, _ -> Unit }.flatMapLatest {
                     repository.getNearbyStores()
+                        .onStart { emit(_uiState.value.nearbyStores) }
+                        .catch { emit(emptyList()) }
                 },
                 repository.getNotifications(),
                 repository.getShoppingBasket()
