@@ -8,7 +8,7 @@
 [![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL%2016%20%2B%20PostGIS-336791?style=flat&logo=postgresql&logoColor=white)](https://postgis.net)
 [![Redis](https://img.shields.io/badge/Cache-Redis%207%20(SingleFlight)-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io)
 [![Docker](https://img.shields.io/badge/Infra-Docker%20Compose-2496ED?style=flat&logo=docker&logoColor=white)](https://docker.com)
-[![License](https://img.shields.io/badge/License-Proprietary-blue.svg)](LICENSE)
+
 
 ---
 
@@ -310,25 +310,6 @@ CREATE TABLE price_records (
 
 ---
 
-## 🛡️ Security, Privacy & Legal Posture
-
-1. **Zero APK Secrets:** No administrative keys, backend secrets, or cloud credentials exist in client bytecode or `BuildConfig`.
-2. **IT Act §79 / Intermediary Safe Harbor:** Community prices are strictly labeled as *"Community Reported"*, *"Recently Observed"*, or *"Community Corroborated"*. The platform acts as a neutral aggregator and never certifies community prices as merchant guarantees.
-3. **Location Privacy (DPDP Compliant):** Location coordinates are acquired strictly on-demand in the foreground. No background tracking or continuous location collection occurs.
-4. **EXIF Sanitization:** Any receipt or shelf-tag photograph uploaded for verification has GPS metadata stripped prior to storage.
-5. **Store Trademarks:** Merchant names appear as plain text. Proprietary logos are displayed only if the store owner claims their profile and explicitly uploads branding assets.
 
 ---
 
-## 📜 Development Policy
-
-Per project governance defined in [AGENTS.md](file:///c:/Users/vasiy/Documents/pricing/Pricing-System/AGENTS.md):
-- **Full-System Implementation First:** All feature modules across the backend and mobile surfaces must be integrated and compiled cleanly prior to executing automated test suites.
-- **Architectural Purity:** Clean separation between presentation (`feature/*`), domain models (`core/model`), and data/network (`core/data`, `core/network`).
-
----
-
-## 👥 Authors & Maintainers
-
-- **Price Bridge Engineering Team**
-- Architecture, design tokens, and technical documentation maintained in [AGENTS.md](file:///c:/Users/vasiy/Documents/pricing/Pricing-System/AGENTS.md) and [PROJECT.md](file:///c:/Users/vasiy/Documents/pricing/Pricing-System/PROJECT.md).
