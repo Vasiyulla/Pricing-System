@@ -71,6 +71,8 @@ func NewRouter(
 		// Stores
 		r.Route("/stores", func(r chi.Router) {
 			r.Get("/nearby", h.Store.GetNearby)
+			r.With(rateLimiter.Middleware("store_create", 30, time.Minute)).Post("/", h.Store.Create)
+			r.With(rateLimiter.Middleware("store_create", 30, time.Minute)).Post("/community", h.Store.Create)
 			r.With(rateLimiter.Middleware("verify", 15, time.Minute)).Get("/verify", h.Store.Verify)
 			r.With(rateLimiter.Middleware("verify", 15, time.Minute)).Post("/verify", h.Store.Verify)
 			r.Get("/{id}", h.Store.GetByID)

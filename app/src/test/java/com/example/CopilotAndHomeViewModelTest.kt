@@ -156,6 +156,26 @@ class CopilotAndHomeViewModelTest {
         assertEquals("Test City", vm.uiState.value.location.neighborhood)
         assertTrue(vm.uiState.value.categories.isNotEmpty())
     }
+
+    @Test
+    fun submitPriceViewModel_addStoreNearby_createsAndSelectsStore() = runTest {
+        val repo = TestFakeRepository()
+        val vm = com.example.feature.submit.SubmitPriceViewModel(repository = repo)
+        advanceUntilIdle()
+
+        // 1. Open Add Store Sheet
+        vm.onEvent(com.example.feature.submit.SubmitPriceUiEvent.OnOpenAddStoreSheet)
+        assertTrue(vm.uiState.value.isAddStoreSheetOpen)
+
+        // 2. Confirm adding store
+        vm.onEvent(com.example.feature.submit.SubmitPriceUiEvent.OnConfirmAddStore(name = "Corner Kirana", chain = "Independent"))
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isAddStoreSheetOpen)
+        assertFalse(vm.uiState.value.isCreatingStore)
+        assertEquals("Corner Kirana", vm.uiState.value.selectedStore?.name)
+        assertTrue(vm.uiState.value.nearbyStores.any { it.name == "Corner Kirana" })
+    }
 }
 
 private class HangingNetworkFakeRepository : PriceBridgeRepository by TestFakeRepository() {
@@ -226,6 +246,14 @@ private class TestFakeRepository(
     override fun getPriceWatchAlerts(): Flow<List<PriceWatchAlert>> = flowOf(emptyList())
     override suspend fun loadSavedListIntoActiveBasket(listId: String) {}
     override fun getNearbyStores(): Flow<List<Store>> = flowOf(nearbyStoresToEmit)
+    override suspend fun createStore(name: String, chain: String?, lat: Double, lon: Double, address: String?): Store {
+        return Store(
+            id = "store_${name.lowercase().replace(" ", "_")}",
+            name = name,
+            distanceFormatted = "0.1 mi",
+            address = address ?: "Test Address"
+        )
+    }
     override fun getAllProducts(): Flow<List<Product>> = flowOf(emptyList())
     override suspend fun submitPrice(productId: String, storeId: String, price: Double, mrp: Double, sourceType: String, evidenceId: String?) {}
     override fun getPendingOfflineSubmissionCount(): Flow<Int> = flowOf(0)

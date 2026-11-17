@@ -30,6 +30,10 @@ data class SubmitPriceUiState(
     // Validation
     val validationError: String? = null,
 
+    // Add Missing Store
+    val isAddStoreSheetOpen: Boolean = false,
+    val isCreatingStore: Boolean = false,
+
     // Offline Resilience (Plan Sprint 6)
     val pendingOfflineCount: Int = 0,
     val isOfflineMode: Boolean = false
@@ -50,6 +54,9 @@ sealed interface SubmitPriceUiEvent {
     data class OnPriceChanged(val price: String) : SubmitPriceUiEvent
     data class OnMrpChanged(val mrp: String) : SubmitPriceUiEvent
     data class OnSourceTypeSelected(val sourceType: SourceType) : SubmitPriceUiEvent
+    data object OnOpenAddStoreSheet : SubmitPriceUiEvent
+    data object OnDismissAddStoreSheet : SubmitPriceUiEvent
+    data class OnConfirmAddStore(val name: String, val chain: String) : SubmitPriceUiEvent
     data object OnSubmitClicked : SubmitPriceUiEvent
     data object OnBackClicked : SubmitPriceUiEvent
     data object OnDismissSuccess : SubmitPriceUiEvent

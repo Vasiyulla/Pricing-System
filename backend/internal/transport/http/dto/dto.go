@@ -67,6 +67,17 @@ type VerifyStoreRequest struct {
 	Longitude float64 `json:"longitude"`
 }
 
+type CreateStoreRequest struct {
+	ID        string  `json:"id,omitempty"`
+	Name      string  `json:"name"`
+	Chain     string  `json:"chain,omitempty"`
+	Format    string  `json:"format,omitempty"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Address   string  `json:"address,omitempty"`
+	Postcode  string  `json:"postcode,omitempty"`
+}
+
 type BasketOptimizeRequest struct {
 	Items   []domain.BasketItem `json:"items"`
 	UserLat float64             `json:"user_lat"`

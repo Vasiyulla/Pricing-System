@@ -20,6 +20,11 @@ interface PriceBridgeApiService {
         @Query("mode") mode: String = "walking"
     ): List<NetworkStore>
 
+    @POST("api/v1/stores/community")
+    suspend fun createCommunityStore(
+        @Body request: NetworkCreateStoreRequest
+    ): NetworkStore
+
     @GET("api/v1/stores/{id}")
     suspend fun getStoreById(@Path("id") storeId: String): NetworkStore
 

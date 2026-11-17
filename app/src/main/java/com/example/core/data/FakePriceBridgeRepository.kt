@@ -990,6 +990,21 @@ class FakePriceBridgeRepository : PriceBridgeRepository {
 
     // ── Price Submission ──
     override fun getNearbyStores(): Flow<List<Store>> = nearbyStores.asStateFlow()
+
+    override suspend fun createStore(name: String, chain: String?, lat: Double, lon: Double, address: String?): Store {
+        val newStore = Store(
+            id = "store_${name.lowercase().replace(" ", "_").take(15)}_${System.currentTimeMillis() % 10000}",
+            name = name.trim(),
+            address = address ?: "Local Community Store",
+            distanceFormatted = "0.1 mi",
+            latitude = if (lat != 0.0) lat else 0.0,
+            longitude = if (lon != 0.0) lon else 0.0,
+            isStoreConfirmedPartner = false
+        )
+        nearbyStores.value = listOf(newStore) + nearbyStores.value.filter { it.name.lowercase() != name.lowercase() }
+        return newStore
+    }
+
     override fun getAllProducts(): Flow<List<Product>> = allProducts.asStateFlow()
 
     override suspend fun submitPrice(

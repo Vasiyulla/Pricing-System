@@ -54,6 +54,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -231,11 +232,22 @@ fun HomeContent(
                 OfflineBanner()
             }
 
+            // Non-blocking loading indicator: keep feed interactive while updating
+            if (uiState.isLoading) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            }
+
             when {
-                uiState.isLoading -> {
+                uiState.isLoading && uiState.deals.isEmpty() && uiState.nearbyStores.isEmpty() && uiState.categories.isEmpty() && uiState.shoppingBasket == null -> {
                     LoadingStateView(modifier = Modifier.weight(1f))
                 }
-                uiState.errorMessage != null -> {
+                uiState.errorMessage != null && uiState.deals.isEmpty() && uiState.nearbyStores.isEmpty() -> {
                     ErrorStateView(
                         errorMessage = uiState.errorMessage,
                         onRetryClick = { onEvent(HomeUiEvent.OnRetryClicked) },

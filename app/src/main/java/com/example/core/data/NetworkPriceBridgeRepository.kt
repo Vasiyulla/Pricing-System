@@ -35,6 +35,7 @@ import com.example.core.model.StoreSplitSummary
 import com.example.core.model.UserProfile
 import com.example.core.model.UserRole
 import com.example.core.network.ApiClient
+import com.example.core.network.NetworkCreateStoreRequest
 import com.example.core.network.NetworkPriceSubmission
 import com.example.core.network.NetworkProduct
 import com.example.core.network.NetworkStore
@@ -44,6 +45,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -355,15 +359,23 @@ class NetworkPriceBridgeRepository(
                 query = query,
                 category = actualCategory
             )
-            val products = netProducts.map { netProd ->
-                try {
-                    val comps = api.service.compareProductPrices(netProd.id, currentLat, currentLon)
-                    val storePrices = comps.map { it.toStorePrice() }
-                    val best = storePrices.minByOrNull { it.price }
-                    netProd.toProduct(bestPrice = best, comparedCount = comps.size, alternatives = storePrices)
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    netProd.toProduct()
+            val products = if (currentLat == 0.0 && currentLon == 0.0) {
+                netProducts.map { it.toProduct() }
+            } else {
+                coroutineScope {
+                    netProducts.map { netProd ->
+                        async {
+                            try {
+                                val comps = api.service.compareProductPrices(netProd.id, currentLat, currentLon)
+                                val storePrices = comps.map { it.toStorePrice() }
+                                val best = storePrices.minByOrNull { it.price }
+                                netProd.toProduct(bestPrice = best, comparedCount = comps.size, alternatives = storePrices)
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                netProd.toProduct()
+                            }
+                        }
+                    }.awaitAll()
                 }
             }
 
@@ -615,6 +627,37 @@ class NetworkPriceBridgeRepository(
             emit(liveResult)
         }
     }.flowOn(Dispatchers.IO)
+
+    override suspend fun createStore(
+        name: String,
+        chain: String?,
+        lat: Double,
+        lon: Double,
+        address: String?
+    ): Store = withContext(Dispatchers.IO) {
+        val targetLat = if (lat != 0.0) lat else currentLat
+        val targetLon = if (lon != 0.0) lon else currentLon
+        val req = NetworkCreateStoreRequest(
+            name = name.trim(),
+            chain = chain?.trim() ?: name.trim(),
+            latitude = targetLat,
+            longitude = targetLon,
+            address = address?.trim() ?: "Local Community Store",
+            postcode = ""
+        )
+        val netStore = api.service.createCommunityStore(req)
+        val store = netStore.toStore()
+
+        // Cache newly created store in Room & memory
+        try {
+            database?.cachedStoreDao()?.insertStore(CachedStoreEntity.fromStore(store))
+        } catch (_: Exception) {}
+
+        val currentList = lastStores.orEmpty()
+        lastStores = listOf(store) + currentList.filter { it.id != store.id }
+
+        store
+    }
 
     override fun getAllProducts(): Flow<List<Product>> = flow {
         val result: List<Product> = try {

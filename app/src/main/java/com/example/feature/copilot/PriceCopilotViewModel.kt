@@ -241,7 +241,7 @@ class PriceCopilotViewModel(
         } else {
             ChatMessage(
                 sender = MessageSender.COPILOT,
-                text = "I couldn't find \"$query\" in the catalog yet, and there are no tracked stores within range of your current location.\n\nYou can add \"$query\" using '+ Add Product' on Home or Profile, or ask me: 'Show my added products'.",
+                text = "I couldn't find \"$query\" in the catalog yet, and there are no tracked stores within range of your current location.\n\nYou can add your local store using '+ Add Store' on Submit Price or register new products from Profile.",
                 intentTag = "NO_LOCAL_COVERAGE",
                 confidencePercent = null
             )

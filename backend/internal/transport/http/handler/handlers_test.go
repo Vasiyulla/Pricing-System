@@ -129,3 +129,59 @@ func TestUserProductsEndpoint_ReturnsUserCreatedProducts(t *testing.T) {
 	}
 }
 
+func TestStoreCommunityCreateAndDeduplication(t *testing.T) {
+	mem := repository.NewMemoryStore()
+	routeSvc := service.NewRouteService("osrm", "https://router.project-osrm.org", "", nil)
+	storeHandler := NewStoreHandler(mem.StoreRepo(), mem.ProductRepo(), mem.PriceRepo(), mem.BountyRepo(), mem.YellowStickerRepo(), nil, nil, routeSvc, nil)
+
+	// 1. Missing name -> 400 Bad Request
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/stores/community", bytes.NewBufferString(`{"name":"","latitude":52.4862,"longitude":-1.8904}`))
+	storeHandler.Create(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty name, got %d", rec.Code)
+	}
+
+	// 2. Zero coordinates -> 400 Bad Request
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/stores/community", bytes.NewBufferString(`{"name":"Patel Kirana","latitude":0,"longitude":0}`))
+	storeHandler.Create(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for zero coords, got %d", rec.Code)
+	}
+
+	// 3. Valid community store -> 201 Created
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/stores/community", bytes.NewBufferString(`{
+		"name":"Patel Brothers Grocers",
+		"chain":"Independent",
+		"latitude":52.4862,
+		"longitude":-1.8904,
+		"address":"Soho Road, Birmingham"
+	}`))
+	storeHandler.Create(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 creating store, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var created domain.Store
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("failed decoding created store: %v", err)
+	}
+	if created.Name != "Patel Brothers Grocers" || created.Latitude != 52.4862 {
+		t.Fatalf("unexpected store payload: %+v", created)
+	}
+
+	// 4. Duplicate store submission nearby -> returns 200 with existing store
+	recDup := httptest.NewRecorder()
+	reqDup := httptest.NewRequest(http.MethodPost, "/api/v1/stores/community", bytes.NewBufferString(`{
+		"name":"Patel Brothers Grocers",
+		"latitude":52.4862,
+		"longitude":-1.8904
+	}`))
+	storeHandler.Create(recDup, reqDup)
+	if recDup.Code != http.StatusOK {
+		t.Fatalf("expected 200 for duplicate store nearby, got %d: %s", recDup.Code, recDup.Body.String())
+	}
+}
+

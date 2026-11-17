@@ -66,6 +66,45 @@ class SubmitPriceViewModel(
             is SubmitPriceUiEvent.OnSourceTypeSelected -> {
                 _uiState.update { it.copy(selectedSourceType = event.sourceType) }
             }
+            is SubmitPriceUiEvent.OnOpenAddStoreSheet -> {
+                _uiState.update { it.copy(isAddStoreSheetOpen = true) }
+            }
+            is SubmitPriceUiEvent.OnDismissAddStoreSheet -> {
+                _uiState.update { it.copy(isAddStoreSheetOpen = false) }
+            }
+            is SubmitPriceUiEvent.OnConfirmAddStore -> {
+                val name = event.name.trim()
+                if (name.isNotEmpty()) {
+                    viewModelScope.launch {
+                        _uiState.update { it.copy(isCreatingStore = true) }
+                        try {
+                            val newStore = repository.createStore(
+                                name = name,
+                                chain = event.chain.ifBlank { null },
+                                lat = 0.0,
+                                lon = 0.0
+                            )
+                            _uiState.update { state ->
+                                val updatedStores = listOf(newStore) + state.nearbyStores.filter { it.id != newStore.id }
+                                state.copy(
+                                    isAddStoreSheetOpen = false,
+                                    isCreatingStore = false,
+                                    nearbyStores = updatedStores,
+                                    selectedStore = newStore,
+                                    validationError = null
+                                )
+                            }
+                        } catch (e: Exception) {
+                            _uiState.update {
+                                it.copy(
+                                    isCreatingStore = false,
+                                    validationError = e.localizedMessage ?: "Failed to add store"
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             is SubmitPriceUiEvent.OnSubmitClicked -> submitPrice()
             is SubmitPriceUiEvent.OnDismissSuccess -> {
                 _uiState.update { it.copy(isSubmitted = false) }

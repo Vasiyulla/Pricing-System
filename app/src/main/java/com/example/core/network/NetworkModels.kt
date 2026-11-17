@@ -248,3 +248,14 @@ data class NetworkPriceRecordItem(
     @Json(name = "observed_at") val observedAt: String = ""
 )
 
+@JsonClass(generateAdapter = true)
+data class NetworkCreateStoreRequest(
+    val name: String,
+    val chain: String? = null,
+    val format: String? = "Local",
+    val latitude: Double,
+    val longitude: Double,
+    val address: String? = null,
+    val postcode: String? = ""
+)
+

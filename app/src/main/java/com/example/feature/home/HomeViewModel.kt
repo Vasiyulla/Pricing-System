@@ -183,6 +183,14 @@ class HomeViewModel(
             currentState.location.longitude != 0.0
         _uiState.update { it.copy(isLoading = !hasRenderableContent, errorMessage = null) }
 
+        // Fail-safe watchdog: never allow the UI to remain in an indeterminate loading state for > 2.5s
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(2500)
+            if (_uiState.value.isLoading) {
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+
         offlineCountJob?.cancel()
         offlineCountJob = viewModelScope.launch {
             repository.getPendingOfflineSubmissionCount().collect { count ->

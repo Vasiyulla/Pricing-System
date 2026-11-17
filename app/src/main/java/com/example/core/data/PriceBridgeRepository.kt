@@ -56,6 +56,7 @@ interface PriceBridgeRepository {
 
     // ── Price Submission & Offline Queue ──
     fun getNearbyStores(): Flow<List<Store>>
+    suspend fun createStore(name: String, chain: String? = null, lat: Double, lon: Double, address: String? = null): Store
     fun getAllProducts(): Flow<List<Product>>
     suspend fun submitPrice(
         productId: String,

@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -118,6 +119,108 @@ func (h *StoreHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond.JSON(w, http.StatusOK, store)
+}
+
+func sanitizeStoreSlug(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else if r == ' ' || r == '-' || r == '_' {
+			b.WriteRune('_')
+		}
+	}
+	res := strings.Trim(b.String(), "_")
+	if len(res) > 20 {
+		res = res[:20]
+	}
+	if res == "" {
+		res = "store"
+	}
+	return res
+}
+
+// Create registers a community-added store with proximity deduplication.
+func (h *StoreHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var req dto.CreateStoreRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respond.Error(w, r, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		respond.Error(w, r, http.StatusBadRequest, "store name is required")
+		return
+	}
+	if req.Latitude == 0 && req.Longitude == 0 {
+		respond.Error(w, r, http.StatusBadRequest, "valid coordinates (latitude, longitude) are required")
+		return
+	}
+
+	// Proximity deduplication: check if a store with the same name already exists within 50m
+	if existing, err := h.storeRepo.GetNearby(r.Context(), req.Latitude, req.Longitude, 0.05); err == nil {
+		for _, s := range existing {
+			if strings.EqualFold(strings.TrimSpace(s.Name), name) {
+				respond.JSON(w, http.StatusOK, s)
+				return
+			}
+		}
+	}
+
+	id := strings.TrimSpace(req.ID)
+	if id == "" {
+		id = fmt.Sprintf("store_%s_%s", sanitizeStoreSlug(name), uuid.New().String()[:8])
+	}
+
+	chain := domain.StoreChain(req.Chain)
+	if chain == "" {
+		chain = domain.StoreChain(name)
+	}
+
+	format := domain.StoreFormat(req.Format)
+	if format == "" {
+		format = domain.FormatLocal
+	}
+
+	address := strings.TrimSpace(req.Address)
+	if address == "" {
+		address = fmt.Sprintf("Near %.4f, %.4f", req.Latitude, req.Longitude)
+	}
+
+	store := domain.Store{
+		ID:                 id,
+		Chain:              chain,
+		Format:             format,
+		Name:               name,
+		Latitude:           req.Latitude,
+		Longitude:          req.Longitude,
+		Address:            address,
+		Postcode:           req.Postcode,
+		VerificationStatus: domain.StoreStatusCommunityPending,
+		ReliabilityScore:   85,
+		IsConfirmedPartner: false,
+		OperatingHours:     "8:00 AM - 10:00 PM",
+	}
+
+	if err := h.storeRepo.Create(r.Context(), store); err != nil {
+		respond.Error(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Index in geoCache in background
+	if h.geoCache != nil && h.bgWG != nil {
+		h.bgWG.Add(1)
+		go func() {
+			defer h.bgWG.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = h.geoCache.IndexStores(ctx, []domain.Store{store})
+		}()
+	}
+
+	respond.JSON(w, http.StatusCreated, store)
 }
 
 func (h *StoreHandler) Verify(w http.ResponseWriter, r *http.Request) {
