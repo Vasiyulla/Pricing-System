@@ -140,6 +140,7 @@ func RunAPI() {
 	}
 
 	routeSvc := service.NewRouteService(cfg.RoutingProvider, cfg.OSRMBaseURL, cfg.GoogleMapsAPIKey, rdb)
+	logger.Info("routing provider initialized", "provider", cfg.RoutingProvider, "has_google_key", cfg.GoogleMapsAPIKey != "")
 	compareSvc := service.NewCompareService(repos.store, repos.price, rdb)
 	compareSvc.SetRouteService(routeSvc)
 	productSvc := service.NewProductService(repos.product, rdb, logger, metrics)
